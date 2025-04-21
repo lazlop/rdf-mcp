@@ -1,6 +1,12 @@
 This repository contains code for [Model Context Protocol](https://modelcontextprotocol.io/introduction) servers supporting use of the Brick and 223P ontologies.
 
-Make usre you have [uv](https://docs.astral.sh/uv/) installed.
+Make sure you have [uv](https://docs.astral.sh/uv/) installed. 
+
+This project uses [Black](https://black.readthedocs.io/) for code formatting. To format your code, run:
+
+```bash
+uv run --with dev black .
+```
 
 There are 2 MCP servers in this repository.
 
