@@ -37,6 +37,7 @@ Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop a
 
 <details>
 <summary>I had to make some edits for these to work on my own Claude Desktop installation. Here's what my `claude_desktop_config.json` file look like:</summary>
+
 ```json
 {
   "mcpServers": {
