@@ -35,6 +35,46 @@ Loads latest 223P from [https://open223.info/223p.ttl](https://open223.info/223p
 
 Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop and look at the tools settings to ensure everything is working. 
 
+<details>
+<summary>I had to make some edits for these to work on my own Claude Desktop installation. Here's what my `claude_desktop_config.json` file look like:</summary>
+```json
+{
+  "mcpServers": {
+    "BrickOntology": {
+      "command": "/Users/gabe/.cargo/bin/uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp[cli]",
+        "--with",
+        "rdflib",
+        "--with",
+        "oxrdflib",
+        "mcp",
+        "run",
+        "/Users/gabe/src/rdf-mcp/brick.py"
+      ]
+    },
+    "S223Ontology": {
+      "command": "/Users/gabe/.cargo/bin/uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp[cli]",
+        "--with",
+        "rdflib",
+        "--with",
+        "oxrdflib",
+        "mcp",
+        "run",
+        "/Users/gabe/src/rdf-mcp/s223.py"
+      ]
+    }
+  }
+}
+```
+</details>
+
 ### Pydantic
 
 ```python
