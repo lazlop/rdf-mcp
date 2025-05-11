@@ -33,10 +33,21 @@ Loads latest 223P from [https://open223.info/223p.ttl](https://open223.info/223p
 
 ### Claude Desktop
 
-Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop and look at the tools settings to ensure everything is working. 
+You can run the servers using the provided entry points:
+
+- For the Brick MCP Server:
+  ```bash
+  uv run brick-server
+  ```
+- For the 223P MCP Server:
+  ```bash
+  uv run s223-server
+  ```
+
+Open Claude Desktop and look at the tools settings to ensure everything is working.
 
 <details>
-<summary>I had to make some edits for these to work on my own Claude Desktop installation. Here's what my `claude_desktop_config.json` file look like:</summary>
+<summary>I had to make some edits for these to work on my own Claude Desktop installation. Here's what my `claude_desktop_config.json` file looks like (update the paths as needed for your system):</summary>
 
 ```json
 {
@@ -53,7 +64,7 @@ Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop a
         "oxrdflib",
         "mcp",
         "run",
-        "/Users/gabe/src/rdf-mcp/brick.py"
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/brick_server.py"
       ]
     },
     "S223Ontology": {
@@ -68,7 +79,7 @@ Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop a
         "oxrdflib",
         "mcp",
         "run",
-        "/Users/gabe/src/rdf-mcp/s223.py"
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/s223_server.py"
       ]
     }
   }
@@ -98,7 +109,7 @@ server = MCPServerStdio(
         "oxrdflib",
         "mcp",
         "run",
-        "brick.py"
+        "rdf_mcp/servers/brick_server.py"
     ],
 )
 
