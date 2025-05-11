@@ -21,5 +21,7 @@ jobs:
         run: uv pip install --system -e .
       - name: Install pytest
         run: uv pip install --system pytest
+      - name: Install pytest-cov
+        run: uv pip install --system pytest-cov
       - name: Run tests
         run: pytest 
