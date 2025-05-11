@@ -223,3 +223,12 @@ def get_constraints(term: str) -> list[dict]:
 #    toc = rdflib.BRICK[to_class]
 #    relationships = ontology.available_relationships(fromc, toc)
 #    return [str(r).split("#")[-1] for r in relationships]
+
+
+def main():
+    print("s223 MCP server starting...", file=sys.stderr)
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()

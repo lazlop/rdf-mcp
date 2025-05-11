@@ -2,7 +2,7 @@ from mcp.server.fastmcp import FastMCP
 from rdflib import Graph, URIRef, Literal, Namespace, BRICK, RDFS
 from rdflib.term import Variable
 from typing import List, Optional
-from smash import smash_distance
+from rdf_mcp.utils.smash import smash_distance
 import sys
 
 mcp = FastMCP("GraphDemo", dependencies=["rdflib", "oxrdflib"])
@@ -15,7 +15,9 @@ ontology = Graph().parse("https://brickschema.org/schema/1.4/Brick.ttl")
 def expand_abbreviation(abbreviation: str) -> list[str]:
     """Expand an abbreviation to its full form using the Brick ontology"""
     # return the top 5 matches from the class dictionary
-    closest_matches = sorted(CLASS_DICT.keys(), key=lambda x: smash_distance(abbreviation, x))[:5]
+    closest_matches = sorted(
+        CLASS_DICT.keys(), key=lambda x: smash_distance(abbreviation, x)
+    )[:5]
     print(f"closest match to {abbreviation} is {closest_matches}", file=sys.stderr)
     return closest_matches
 
@@ -94,11 +96,11 @@ def get_definition_brick(class_: str) -> str:
     """Get the definition of cyber-physical concepts from the Brick ontology."""
     return ontology.cbd(BRICK[class_]).serialize(format="turtle")
 
+
 @mcp.resource("rdf://describe/{term}")
 def get_definition(term: str) -> str:
     """Get the definition of cyber-physical concepts like sensors from the Brick ontology."""
     return ontology.cbd(BRICK[term]).serialize(format="turtle")
-
 
 
 # build a dictionary of all classes in the Brick ontology
@@ -116,11 +118,19 @@ def build_class_dict() -> dict[str, str]:
     return class_dict
 
 
-CLASS_DICT = build_class_dict()
-print(f"{CLASS_DICT}", file=sys.stderr)
+# Initialize CLASS_DICT as an empty dict so it can be patched in tests
+CLASS_DICT = {}
 
 # TODO: add a "most likely class" tool
-print("mcp ready", file=sys.stderr)
+
+
+def main():
+    global CLASS_DICT
+    CLASS_DICT = build_class_dict()
+    print(f"{CLASS_DICT}", file=sys.stderr)
+    print("mcp ready", file=sys.stderr)
+    mcp.run()
+
 
 if __name__ == "__main__":
-    mcp.run()
+    main()
