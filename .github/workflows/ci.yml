@@ -18,6 +18,6 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Install dependencies
-        run: uv pip install -e .
+        run: uv pip install --system -e .
       - name: Run tests
         run: pytest 
