@@ -33,16 +33,7 @@ Loads latest 223P from [https://open223.info/223p.ttl](https://open223.info/223p
 
 ### Claude Desktop
 
-You can run the servers using the provided entry points:
-
-- For the Brick MCP Server:
-  ```bash
-  uv run brick-server
-  ```
-- For the 223P MCP Server:
-  ```bash
-  uv run s223-server
-  ```
+Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop and look at the tools settings to ensure everything is working.
 
 Open Claude Desktop and look at the tools settings to ensure everything is working.
 
