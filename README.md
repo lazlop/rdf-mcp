@@ -47,7 +47,7 @@ You can run the servers using the provided entry points:
 Open Claude Desktop and look at the tools settings to ensure everything is working.
 
 <details>
-<summary>I had to make some edits for these to work on my own Claude Desktop installation. Here's what my `claude_desktop_config.json` file looks like (update the paths as needed for your system):</summary>
+<summary>I had to make some edits for these to work on my own Claude Desktop installation. <b>Note:</b> You must set the <code>PYTHONPATH</code> environment variable to the root of this repository so that the servers can import the <code>rdf_mcp</code> package. Here is what my <code>claude_desktop_config.json</code> file looks like (update the paths as needed for your system):</summary>
 
 ```json
 {
@@ -57,30 +57,36 @@ Open Claude Desktop and look at the tools settings to ensure everything is worki
       "args": [
         "run",
         "--with",
-        "mcp[cli]",
+        "'mcp[cli]'",
         "--with",
         "rdflib",
         "--with",
         "oxrdflib",
         "mcp",
         "run",
-        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/brick_server.py"
-      ]
+        "rdf_mcp/servers/brick_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/gabe/src/rdf-mcp"
+      }
     },
     "S223Ontology": {
       "command": "/Users/gabe/.cargo/bin/uv",
       "args": [
         "run",
         "--with",
-        "mcp[cli]",
+        "'mcp[cli]'",
         "--with",
         "rdflib",
         "--with",
         "oxrdflib",
         "mcp",
         "run",
-        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/s223_server.py"
-      ]
+        "rdf_mcp/servers/s223_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/gabe/src/rdf-mcp"
+      }
     }
   }
 }
@@ -111,6 +117,9 @@ server = MCPServerStdio(
         "run",
         "rdf_mcp/servers/brick_server.py"
     ],
+    env={
+        "PYTHONPATH": "/Users/gabe/src/rdf-mcp"  # Update this path to your repo root
+    },
 )
 
 model = OpenAIModel(
