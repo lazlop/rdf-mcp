@@ -15,24 +15,29 @@ def mock_s223_ontology():
     # Mock query results for get_terms
     terms_result = MagicMock()
     terms_result.__iter__.return_value = [
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Device"),),
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Point"),),
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Equipment"),),
+        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#InletConnectionPoint"),),
+        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#OutletConnectionPoint"),),
+        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Fan"),),
     ]
 
     # Mock query results for get_properties
     props_result = MagicMock()
     props_result.__iter__.return_value = [
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasPoint"),),
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#isPointOf"),),
+        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasConnectionPoint"),),
+        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasMedium"),),
+        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#cnx"),),
     ]
 
     # Mock query results for get_possible_properties
     poss_props_result = MagicMock()
     poss_props_result.__iter__.return_value = [
         (
-            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasPoint"),
-            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Point"),
+            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasConnectionPoint"),
+            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#InletConnectionPoint"),
+        ),
+        (
+            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasMedium"),
+            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Fluid-Air"),
         ),
     ]
 
@@ -55,11 +60,11 @@ def mock_s223_ontology():
 def test_get_terms(mock_ontology):
     """Test get_terms function."""
     mock_ontology.query.return_value = [
-        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#Device"),),
-        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#Point"),),
+        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#InletConnectionPoint"),),
+        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#OutletConnectionPoint"),),
         (
             MagicMock(
-                __str__=lambda self: "http://data.ashrae.org/standard223#Equipment"
+                __str__=lambda self: "http://data.ashrae.org/standard223#Fan"
             ),
         ),
     ]
@@ -67,9 +72,9 @@ def test_get_terms(mock_ontology):
 
     result = get_terms()
     assert isinstance(result, list)
-    assert "Device" in result
-    assert "Point" in result
-    assert "Equipment" in result
+    assert "InletConnectionPoint" in result
+    assert "OutletConnectionPoint" in result
+    assert "Fan" in result
 
 
 @patch("rdf_mcp.servers.s223_server.ontology")
@@ -78,12 +83,17 @@ def test_get_properties(mock_ontology):
     mock_ontology.query.return_value = [
         (
             MagicMock(
-                __str__=lambda self: "http://data.ashrae.org/standard223#hasPoint"
+                __str__=lambda self: "http://data.ashrae.org/standard223#hasConnectionPoint"
             ),
         ),
         (
             MagicMock(
-                __str__=lambda self: "http://data.ashrae.org/standard223#isPointOf"
+                __str__=lambda self: "http://data.ashrae.org/standard223#hasMedium"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "http://data.ashrae.org/standard223#cnx"
             ),
         ),
     ]
@@ -91,8 +101,9 @@ def test_get_properties(mock_ontology):
 
     result = get_properties()
     assert isinstance(result, list)
-    assert "hasPoint" in result
-    assert "isPointOf" in result
+    assert "hasConnectionPoint" in result
+    assert "hasMedium" in result
+    assert "cnx" in result
 
 
 @patch("rdf_mcp.servers.s223_server.ontology")
@@ -100,16 +111,18 @@ def test_get_possible_properties(mock_ontology):
     """Test get_possible_properties function."""
     mock_result = MagicMock()
     mock_result.bindings = [
-        {Variable("path"): "hasProperty"},
-        {Variable("path"): "hasObservationLocation"},
+        {Variable("path"): "hasConnectionPoint"},
+        {Variable("path"): "hasMedium"},
+        {Variable("path"): "cnx"},
     ]
     mock_ontology.query.return_value = mock_result
     from rdf_mcp.servers.s223_server import get_possible_properties
 
-    result = get_possible_properties("Sensor")
+    result = get_possible_properties("Fan")
     assert isinstance(result, list)
-    assert "hasProperty" in result
-    assert "hasObservationLocation" in result
+    assert "hasConnectionPoint" in result
+    assert "hasMedium" in result
+    assert "cnx" in result
 
 
 @patch("rdf_mcp.servers.s223_server.ontology")

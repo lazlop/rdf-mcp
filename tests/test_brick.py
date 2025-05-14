@@ -46,17 +46,47 @@ def test_get_terms(mock_ontology):
     mock_ontology.query.return_value = [
         (
             MagicMock(
-                __str__=lambda self: "https://brickschema.org/schema/Brick#Temperature_Sensor"
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Air_Temperature_Sensor"
             ),
         ),
         (
             MagicMock(
-                __str__=lambda self: "https://brickschema.org/schema/Brick#Humidity_Sensor"
+                __str__=lambda self: "https://brickschema.org/schema/Brick#CO2_Level_Sensor"
             ),
         ),
         (
             MagicMock(
-                __str__=lambda self: "https://brickschema.org/schema/Brick#Air_Handler_Unit"
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Methane_Level_Sensor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#PM2.5_Sensor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Building"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Floor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Room"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Office_Kitchen"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Site"
             ),
         ),
     ]
@@ -65,21 +95,34 @@ def test_get_terms(mock_ontology):
     result = get_terms()
 
     assert isinstance(result, list)
-    assert "Temperature_Sensor" in result
-    assert "Humidity_Sensor" in result
-    assert "Air_Handler_Unit" in result
+    assert "Air_Temperature_Sensor" in result
+    assert "CO2_Level_Sensor" in result
+    assert "Methane_Level_Sensor" in result
+    assert "PM2.5_Sensor" in result
+    assert "Building" in result
+    assert "Floor" in result
+    assert "Room" in result
+    assert "Office_Kitchen" in result
+    assert "Site" in result
 
 
 @patch("rdf_mcp.servers.brick_server.ontology")
 def test_get_properties(mock_ontology):
     """Test get_properties function."""
     mock_ontology.query.return_value = [
-        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#prop1"),),
-        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#prop2"),),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#hasUnit"),),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#isPointOf"),),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#hasPart"),),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#area"),),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#value"),),
     ]
     from rdf_mcp.servers.brick_server import get_properties
 
     result = get_properties()
 
     assert isinstance(result, list)
-    # You may want to compare specific expected outputs
+    assert "hasUnit" in result
+    assert "isPointOf" in result
+    assert "hasPart" in result
+    assert "area" in result
+    assert "value" in result
