@@ -116,7 +116,7 @@ server = MCPServerStdio(
         "oxrdflib",
         "mcp",
         "run",
-        "rdf_mcp/servers/brick_server.py"
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/s223_server.py"
     ],
     env={
         "PYTHONPATH": "/Users/gabe/src/rdf-mcp"  # Update this path to your repo root
