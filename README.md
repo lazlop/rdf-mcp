@@ -55,7 +55,7 @@ Open Claude Desktop and look at the tools settings to ensure everything is worki
         "oxrdflib",
         "mcp",
         "run",
-        "rdf_mcp/servers/brick_server.py"
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/brick_server.py"
       ],
       "env": {
         "PYTHONPATH": "/Users/gabe/src/rdf-mcp"
@@ -73,7 +73,7 @@ Open Claude Desktop and look at the tools settings to ensure everything is worki
         "oxrdflib",
         "mcp",
         "run",
-        "rdf_mcp/servers/s223_server.py"
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/s223_server.py"
       ],
       "env": {
         "PYTHONPATH": "/Users/gabe/src/rdf-mcp"
