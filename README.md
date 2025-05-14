@@ -58,7 +58,7 @@ Open Claude Desktop and look at the tools settings to ensure everything is worki
       "args": [
         "run",
         "--with",
-        "'mcp[cli]'",
+        "mcp[cli]",
         "--with",
         "rdflib",
         "--with",
@@ -76,7 +76,7 @@ Open Claude Desktop and look at the tools settings to ensure everything is worki
       "args": [
         "run",
         "--with",
-        "'mcp[cli]'",
+        "mcp[cli]",
         "--with",
         "rdflib",
         "--with",
