@@ -15,15 +15,27 @@ def mock_s223_ontology():
     # Mock query results for get_terms
     terms_result = MagicMock()
     terms_result.__iter__.return_value = [
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#InletConnectionPoint"),),
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#OutletConnectionPoint"),),
+        (
+            MagicMock(
+                toPython=lambda: "http://data.ashrae.org/standard223#InletConnectionPoint"
+            ),
+        ),
+        (
+            MagicMock(
+                toPython=lambda: "http://data.ashrae.org/standard223#OutletConnectionPoint"
+            ),
+        ),
         (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#Fan"),),
     ]
 
     # Mock query results for get_properties
     props_result = MagicMock()
     props_result.__iter__.return_value = [
-        (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasConnectionPoint"),),
+        (
+            MagicMock(
+                toPython=lambda: "http://data.ashrae.org/standard223#hasConnectionPoint"
+            ),
+        ),
         (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasMedium"),),
         (MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#cnx"),),
     ]
@@ -32,8 +44,12 @@ def mock_s223_ontology():
     poss_props_result = MagicMock()
     poss_props_result.__iter__.return_value = [
         (
-            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasConnectionPoint"),
-            MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#InletConnectionPoint"),
+            MagicMock(
+                toPython=lambda: "http://data.ashrae.org/standard223#hasConnectionPoint"
+            ),
+            MagicMock(
+                toPython=lambda: "http://data.ashrae.org/standard223#InletConnectionPoint"
+            ),
         ),
         (
             MagicMock(toPython=lambda: "http://data.ashrae.org/standard223#hasMedium"),
@@ -60,13 +76,17 @@ def mock_s223_ontology():
 def test_get_terms(mock_ontology):
     """Test get_terms function."""
     mock_ontology.query.return_value = [
-        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#InletConnectionPoint"),),
-        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#OutletConnectionPoint"),),
         (
             MagicMock(
-                __str__=lambda self: "http://data.ashrae.org/standard223#Fan"
+                __str__=lambda self: "http://data.ashrae.org/standard223#InletConnectionPoint"
             ),
         ),
+        (
+            MagicMock(
+                __str__=lambda self: "http://data.ashrae.org/standard223#OutletConnectionPoint"
+            ),
+        ),
+        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#Fan"),),
     ]
     from rdf_mcp.servers.s223_server import get_terms
 
@@ -91,11 +111,7 @@ def test_get_properties(mock_ontology):
                 __str__=lambda self: "http://data.ashrae.org/standard223#hasMedium"
             ),
         ),
-        (
-            MagicMock(
-                __str__=lambda self: "http://data.ashrae.org/standard223#cnx"
-            ),
-        ),
+        (MagicMock(__str__=lambda self: "http://data.ashrae.org/standard223#cnx"),),
     ]
     from rdf_mcp.servers.s223_server import get_properties
 

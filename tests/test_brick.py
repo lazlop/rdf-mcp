@@ -69,26 +69,14 @@ def test_get_terms(mock_ontology):
                 __str__=lambda self: "https://brickschema.org/schema/Brick#Building"
             ),
         ),
-        (
-            MagicMock(
-                __str__=lambda self: "https://brickschema.org/schema/Brick#Floor"
-            ),
-        ),
-        (
-            MagicMock(
-                __str__=lambda self: "https://brickschema.org/schema/Brick#Room"
-            ),
-        ),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#Floor"),),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#Room"),),
         (
             MagicMock(
                 __str__=lambda self: "https://brickschema.org/schema/Brick#Office_Kitchen"
             ),
         ),
-        (
-            MagicMock(
-                __str__=lambda self: "https://brickschema.org/schema/Brick#Site"
-            ),
-        ),
+        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#Site"),),
     ]
     from rdf_mcp.servers.brick_server import get_terms
 
@@ -110,9 +98,21 @@ def test_get_terms(mock_ontology):
 def test_get_properties(mock_ontology):
     """Test get_properties function."""
     mock_ontology.query.return_value = [
-        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#hasUnit"),),
-        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#isPointOf"),),
-        (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#hasPart"),),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#hasUnit"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#isPointOf"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#hasPart"
+            ),
+        ),
         (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#area"),),
         (MagicMock(__str__=lambda self: "https://brickschema.org/schema/Brick#value"),),
     ]
