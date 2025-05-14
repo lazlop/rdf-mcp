@@ -8,6 +8,16 @@ This project uses [Black](https://black.readthedocs.io/) for code formatting. To
 uv run --with dev black .
 ```
 
+## Running tests
+
+To run the test suite, use:
+
+```bash
+uv run pytest
+```
+
+This will discover and run all tests in the `tests/` directory.
+
 There are 2 MCP servers in this repository.
 
 ## Brick MCP Server
@@ -140,3 +150,4 @@ async def main():
 
 asyncio.run(main())
 ```
+
