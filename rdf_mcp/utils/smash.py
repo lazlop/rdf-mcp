@@ -147,3 +147,57 @@ def smash_distance(
 
     # The final distance is in the bottom-right cell
     return d[n][m]
+
+# --- Example Usage (based on potential scenarios) ---
+
+# # Example 1: Typo + Abbreviation
+# s1 = "Stanford University"
+# s2 = "Standford Univ"
+# dist1 = smash_distance(s1, s2)
+# print(f"SMASH distance between '{s1}' and '{s2}': {dist1}") # Expect relatively low cost
+
+# # Example 2: Acronym
+# s1 = "Stanford University"
+# s2 = "SU"
+# dist2 = smash_distance(s1, s2)
+# print(f"SMASH distance between '{s1}' and '{s2}': {dist2}") # Expect cost related to cost_acr
+
+# # Example 3: Acronym with typo in acronym
+# s1 = "Stanford University"
+# s2 = "SR" # R instead of U
+# dist3 = smash_distance(s1, s2)
+# print(f"SMASH distance between '{s1}' and '{s2}': {dist3}") # Expect higher cost than Example 2
+
+# # Example 4: Longer acronym match + abbreviation
+# s1 = "Association for Computing Machinery"
+# s2 = "ACM"
+# dist4 = smash_distance(s1, s2)
+# print(f"SMASH distance between '{s1}' and '{s2}': {dist4}")
+
+# # Example 5: Similar strings
+# s1 = "Data Base Management System"
+# s2 = "Database Management System"
+# dist5 = smash_distance(s1, s2)
+# print(f"SMASH distance between '{s1}' and '{s2}': {dist5}") # Expect low cost (space vs no space handled by ins/del)
+
+# # Example 6: Case-insensitivity test
+# s1 = "berkeley"
+# s2 = "Berkeley"
+# dist6_sensitive = smash_distance(s1, s2, case_sensitive=True)
+# dist6_insensitive = smash_distance(s1, s2, case_sensitive=False)
+# print(f"SMASH distance between '{s1}' and '{s2}' (Case-Sensitive): {dist6_sensitive}")
+# print(f"SMASH distance between '{s1}' and '{s2}' (Case-Insensitive): {dist6_insensitive}")
+
+# # Example 7: Acronym abbreviation mixed
+# s1 = "International Business Machines"
+# s2 = "IBM Corp"
+# dist7 = smash_distance(s1, s2)
+# print(f"SMASH distance between '{s1}' and '{s2}': {dist7}")
+
+# # Example 8: Cost variations
+# s1 = "Stanford University"
+# s2 = "SU"
+# dist8_high_acr = smash_distance(s1, s2, cost_acr=0.1, cost_del=1.0) # Make acronym match cheap
+# dist8_low_acr = smash_distance(s1, s2, cost_acr=1.0, cost_del=0.1)  # Make deletion cheap
+# print(f"SMASH distance between '{s1}' and '{s2}' (cheap acronym): {dist8_high_acr}")
+# print(f"SMASH distance between '{s1}' and '{s2}' (cheap deletion): {dist8_low_acr}")
