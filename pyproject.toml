@@ -16,6 +16,8 @@ dependencies = [
 dev = [
     "black>=25.1.0",
     "flake8>=7.2.0",
+    "pytest>=8.1.0",
+    "pytest-cov>=5.0.0",
 ]
 [tool.black]
 line-length = 88
@@ -29,3 +31,24 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.pytest]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.pytest.ini_options]
+minversion = "8.1.0"
+addopts = "--cov=. --cov-report=term-missing"
+testpaths = ["tests"]
+
+[project.scripts]
+s223-server = "rdf_mcp.servers.s223_server:main"
+brick-server = "rdf_mcp.servers.brick_server:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rdf_mcp*"]

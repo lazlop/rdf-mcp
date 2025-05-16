@@ -8,6 +8,16 @@ This project uses [Black](https://black.readthedocs.io/) for code formatting. To
 uv run black .
 ```
 
+## Running tests
+
+To run the test suite, use:
+
+```bash
+uv run pytest
+```
+
+This will discover and run all tests in the `tests/` directory.
+
 There are 2 MCP servers in this repository.
 
 ## Brick MCP Server
@@ -33,10 +43,12 @@ Loads latest 223P from [https://open223.info/223p.ttl](https://open223.info/223p
 
 ### Claude Desktop
 
-Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop and look at the tools settings to ensure everything is working. 
+Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop and look at the tools settings to ensure everything is working.
+
+Open Claude Desktop and look at the tools settings to ensure everything is working.
 
 <details>
-<summary>I had to make some edits for these to work on my own Claude Desktop installation. Here's what my `claude_desktop_config.json` file look like:</summary>
+<summary>I had to make some edits for these to work on my own Claude Desktop installation. <b>Note:</b> You must set the <code>PYTHONPATH</code> environment variable to the root of this repository so that the servers can import the <code>rdf_mcp</code> package. Here is what my <code>claude_desktop_config.json</code> file looks like (update the paths as needed for your system):</summary>
 
 ```json
 {
@@ -53,8 +65,11 @@ Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop a
         "oxrdflib",
         "mcp",
         "run",
-        "/Users/gabe/src/rdf-mcp/brick.py"
-      ]
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/brick_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/gabe/src/rdf-mcp"
+      }
     },
     "S223Ontology": {
       "command": "/Users/gabe/.cargo/bin/uv",
@@ -68,8 +83,11 @@ Should be as simple as `uv run mcp install brick.py`, then open Claude Desktop a
         "oxrdflib",
         "mcp",
         "run",
-        "/Users/gabe/src/rdf-mcp/s223.py"
-      ]
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/s223_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/gabe/src/rdf-mcp"
+      }
     }
   }
 }
@@ -98,8 +116,11 @@ server = MCPServerStdio(
         "oxrdflib",
         "mcp",
         "run",
-        "brick.py"
+        "/Users/gabe/src/rdf-mcp/rdf_mcp/servers/s223_server.py"
     ],
+    env={
+        "PYTHONPATH": "/Users/gabe/src/rdf-mcp"  # Update this path to your repo root
+    },
 )
 
 model = OpenAIModel(
@@ -129,3 +150,4 @@ async def main():
 
 asyncio.run(main())
 ```
+
