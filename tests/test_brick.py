@@ -126,3 +126,62 @@ def test_get_properties(mock_ontology):
     assert "hasPart" in result
     assert "area" in result
     assert "value" in result
+
+
+@patch("rdf_mcp.servers.brick_server.ontology")
+def test_get_subclasses(mock_ontology):
+    """Test get_subclasses function."""
+    # Mock query results for subclasses of Sensor
+    mock_ontology.query.return_value = [
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Temperature_Sensor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Air_Temperature_Sensor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Zone_Air_Temperature_Sensor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#CO2_Sensor"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/Brick#Humidity_Sensor"
+            ),
+        ),
+    ]
+    from rdf_mcp.servers.brick_server import get_subclasses
+
+    result = get_subclasses("Sensor")
+
+    # Verify it's a list
+    assert isinstance(result, list)
+
+    # Verify it contains expected subclasses
+    assert "Temperature_Sensor" in result
+    assert "Air_Temperature_Sensor" in result
+    assert "Zone_Air_Temperature_Sensor" in result
+    assert "CO2_Sensor" in result
+    assert "Humidity_Sensor" in result
+
+    # Verify the parent class was passed correctly in the query
+    mock_ontology.query.assert_called_once()
+    call_args = mock_ontology.query.call_args
+    assert "parent" in call_args.kwargs.get("initBindings", {})
+
+    # Test with a class that has no subclasses
+    mock_ontology.reset_mock()
+    mock_ontology.query.return_value = []
+
+    result = get_subclasses("LeafClass")
+    assert isinstance(result, list)
+    assert len(result) == 0
