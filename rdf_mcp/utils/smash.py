@@ -148,6 +148,7 @@ def smash_distance(
     # The final distance is in the bottom-right cell
     return d[n][m]
 
+
 # --- Example Usage (based on potential scenarios) ---
 
 # # Example 1: Typo + Abbreviation
