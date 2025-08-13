@@ -185,3 +185,56 @@ def test_get_subclasses(mock_ontology):
     result = get_subclasses("LeafClass")
     assert isinstance(result, list)
     assert len(result) == 0
+
+
+@patch("rdf_mcp.servers.brick_server.ontology")
+def test_get_brick_tags(mock_ontology):
+    """Test get_brick_tags function."""
+    # Mock query results for tags of Zone_Air_Temperature_Sensor
+    mock_ontology.query.return_value = [
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/BrickTag#Zone"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/BrickTag#Air"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/BrickTag#Temperature"
+            ),
+        ),
+        (
+            MagicMock(
+                __str__=lambda self: "https://brickschema.org/schema/BrickTag#Sensor"
+            ),
+        ),
+    ]
+    from rdf_mcp.servers.brick_server import get_brick_tags
+
+    result = get_brick_tags("Zone_Air_Temperature_Sensor")
+
+    # Verify it's a list
+    assert isinstance(result, list)
+
+    # Verify it contains expected tags
+    assert "Zone" in result
+    assert "Air" in result
+    assert "Temperature" in result
+    assert "Sensor" in result
+
+    # Verify the term was passed correctly in the query
+    mock_ontology.query.assert_called_once()
+    call_args = mock_ontology.query.call_args
+    assert "term" in call_args.kwargs.get("initBindings", {})
+
+    # Test with a class that has no tags
+    mock_ontology.reset_mock()
+    mock_ontology.query.return_value = []
+
+    result = get_brick_tags("ClassWithoutTags")
+    assert isinstance(result, list)
+    assert len(result) == 0

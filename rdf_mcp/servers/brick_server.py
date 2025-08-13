@@ -83,6 +83,20 @@ def get_subclasses(parent_class: str) -> list[str]:
 
 
 @mcp.tool()
+def get_brick_tags(term: str) -> list[str]:
+    """Get all tags associated with a Brick class or term"""
+    query = """
+    PREFIX brick: <https://brickschema.org/schema/Brick#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX tag: <https://brickschema.org/schema/BrickTag#>
+    SELECT DISTINCT ?tag WHERE {
+        ?term brick:hasAssociatedTag ?tag .
+    }"""
+    results = ontology.query(query, initBindings={"term": BRICK[term]})
+    return [str(row[0]).split("#")[-1] for row in results]
+
+
+@mcp.tool()
 def get_possible_properties(class_: str) -> list[tuple[str, str]]:
     """Returns pairs of possible (property, object type) for a given brick class"""
     query = """
