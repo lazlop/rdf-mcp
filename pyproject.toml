@@ -9,6 +9,7 @@ dependencies = [
     "mcp[cli]>=1.6.0",
     "oxrdflib>=0.4.0",
     "pydantic-ai>=0.1.3",
+    "pyyaml>=6.0.2",
     "rdflib>=7.1.4",
 ]
 

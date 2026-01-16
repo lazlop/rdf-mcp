@@ -968,6 +968,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "oxrdflib" },
     { name = "pydantic-ai" },
+    { name = "pyyaml" },
     { name = "rdflib" },
 ]
 
@@ -983,6 +984,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
     { name = "oxrdflib", specifier = ">=0.4.0" },
     { name = "pydantic-ai", specifier = ">=0.1.3" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "rdflib", specifier = ">=7.1.4" },
 ]
 
