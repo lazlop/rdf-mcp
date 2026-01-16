@@ -33,6 +33,8 @@ from metrics import (
 
 from utils import CsvLogger
 
+from kgqa import sparql_query
+
 class SparqlQuery(BaseModel):
     """Model for the agent's output."""
     sparql_query: str = Field(..., description="The generated SPARQL query.")
@@ -89,10 +91,8 @@ class SimpleSparqlAgentMCP:
         self.graph_file = graph_file 
         
         # Pass graph_file as environment variable to MCP server
-        mcp_env = os.environ.copy()  
-        if graph_file:  
-            mcp_env['GRAPH_FILE'] = graph_file  #
-        
+        os.environ['GRAPH_FILE'] = graph_file
+        mcp_env = os.environ.copy()          
         mcp_server_args = [
             "run", "--with", "mcp[cli]", "--with", "rdflib", 
             "--with", "oxrdflib", "mcp", "run", mcp_server_script
@@ -173,49 +173,49 @@ class SimpleSparqlAgentMCP:
             print("💔 Could not generate a query")
             return
 
-        # # Evaluate
-        # print("\n--- Evaluation ---")
-        # gen_results_obj = self._run_sparql_query(generated_query)
-        # gt_results_obj = self._run_sparql_query(ground_truth_sparql) if ground_truth_sparql else None
+        # Evaluate
+        print("\n--- Evaluation ---")
+        gen_results_obj = sparql_query(generated_query, result_length = -1)
+        gt_results_obj = sparql_query(ground_truth_sparql) if ground_truth_sparql else None
         
-        # # Calculate metrics
-        # arity_f1, entity_set_f1, row_matching_f1, exact_match_f1 = 0.0, 0.0, 0.0, 0.0
-        # less_columns_flag = False
+        # Calculate metrics
+        arity_f1, entity_set_f1, row_matching_f1, exact_match_f1 = 0.0, 0.0, 0.0, 0.0
+        less_columns_flag = False
         
-        # if gt_results_obj and gt_results_obj["syntax_ok"] and gen_results_obj["syntax_ok"]:
-        #     gold_rows = gt_results_obj["results"]
-        #     pred_rows = gen_results_obj["results"]
+        if gt_results_obj and gt_results_obj["syntax_ok"] and gen_results_obj["syntax_ok"]:
+            gold_rows = gt_results_obj["results"]
+            pred_rows = gen_results_obj["results"]
             
-        #     arity_f1 = get_arity_matching_f1(generated_query, ground_truth_sparql)
-        #     entity_and_row_f1 = get_entity_and_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
-        #     entity_set_f1 = entity_and_row_f1['entity_set_f1']
-        #     row_matching_f1 = entity_and_row_f1['row_matching_f1']
-        #     exact_match_f1 = get_exact_match_f1(gold_rows=gold_rows, pred_rows=pred_rows)
-        #     less_columns_flag = gen_results_obj['col_count'] < gt_results_obj['col_count']
+            arity_f1 = get_arity_matching_f1(generated_query, ground_truth_sparql)
+            entity_and_row_f1 = get_entity_and_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            entity_set_f1 = entity_and_row_f1['entity_set_f1']
+            row_matching_f1 = entity_and_row_f1['row_matching_f1']
+            exact_match_f1 = get_exact_match_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            less_columns_flag = gen_results_obj['col_count'] < gt_results_obj['col_count']
         
-        # log_entry = {
-        #     **eval_data,
-        #     'model': self.model_name,
-        #     'generated_sparql': generated_query,
-        #     'syntax_ok': gen_results_obj['syntax_ok'],
-        #     'returns_results': gen_results_obj['row_count'] > 0,
-        #     'perfect_match': row_matching_f1 == 1.0,
-        #     'gt_num_rows': gt_results_obj['row_count'] if gt_results_obj else 0,
-        #     'gt_num_cols': gt_results_obj['col_count'] if gt_results_obj else 0,
-        #     'gen_num_rows': gen_results_obj['row_count'],
-        #     'gen_num_cols': gen_results_obj['col_count'],
-        #     'arity_matching_f1': arity_f1,
-        #     'entity_set_f1': entity_set_f1,
-        #     'row_matching_f1': row_matching_f1,
-        #     'exact_match_f1': exact_match_f1,
-        #     'less_columns_flag': less_columns_flag,
-        #     'prompt_tokens': self.prompt_tokens,
-        #     'completion_tokens': self.completion_tokens,
-        #     'total_tokens': self.total_tokens
-        # }
+        log_entry = {
+            **eval_data,
+            'model': self.model_name,
+            'generated_sparql': generated_query,
+            'syntax_ok': gen_results_obj['syntax_ok'],
+            'returns_results': gen_results_obj['row_count'] > 0,
+            'perfect_match': row_matching_f1 == 1.0,
+            'gt_num_rows': gt_results_obj['row_count'] if gt_results_obj else 0,
+            'gt_num_cols': gt_results_obj['col_count'] if gt_results_obj else 0,
+            'gen_num_rows': gen_results_obj['row_count'],
+            'gen_num_cols': gen_results_obj['col_count'],
+            'arity_matching_f1': arity_f1,
+            'entity_set_f1': entity_set_f1,
+            'row_matching_f1': row_matching_f1,
+            'exact_match_f1': exact_match_f1,
+            'less_columns_flag': less_columns_flag,
+            'prompt_tokens': self.prompt_tokens,
+            'completion_tokens': self.completion_tokens,
+            'total_tokens': self.total_tokens
+        }
 
-        # logger.log(log_entry)
-        # print(f"📊 Logged results for query_id: {eval_data['query_id']}")
+        logger.log(log_entry)
+        print(f"📊 Logged results for query_id: {eval_data['query_id']}")
 
 
 def run_agent(

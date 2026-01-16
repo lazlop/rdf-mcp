@@ -179,7 +179,7 @@ def find_entities_by_type(brick_class: str, include_subclasses: bool = True) -> 
        (class_uri, RDFS.subClassOf, None) not in ontology:
         return {
             "summary": f"Warning: '{brick_class}' may not be a valid Brick class",
-            "class_searched": f"brick:{brick_class}",
+            "class_searched": f"{brick_class}",
             "entities": [],
             "count": 0,
             "include_subclasses": include_subclasses
@@ -200,7 +200,7 @@ def find_entities_by_type(brick_class: str, include_subclasses: bool = True) -> 
             for entity in g.subjects(RDF.type, target_class):
                 entity_info = {
                     "uri": str(entity),
-                    "class": str(target_class).replace(str(BRICK), "brick:")
+                    "class": str(target_class) #.replace(str(BRICK), "brick:")
                 }
                 
                 # Try to get a label
@@ -218,7 +218,7 @@ def find_entities_by_type(brick_class: str, include_subclasses: bool = True) -> 
         for entity in g.subjects(RDF.type, class_uri):
             entity_info = {
                 "uri": str(entity),
-                "class": f"brick:{brick_class}"
+                "class": f"{brick_class}"
             }
             
             # Try to get a label
