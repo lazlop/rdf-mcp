@@ -3,7 +3,7 @@ simple_sparql_agent_mcp.py
 
 Simplified SPARQL agent that uses tool calls up to a maximum limit.
 """
-
+from pprint import pprint
 import asyncio
 import json
 import os
@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
+from pydantic_ai import Agent, capture_run_messages
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.mcp import MCPServerStdio
@@ -32,7 +32,6 @@ from metrics import (
 )
 
 from utils import CsvLogger
-
 
 class SparqlQuery(BaseModel):
     """Model for the agent's output."""
@@ -55,8 +54,7 @@ class SimpleSparqlAgentMCP:
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
         mcp_server_script: str = "kgqa.py",
-        mcp_server_args: Optional[List[str]] = None,
-        graph: Optional[Graph] = None
+        graph_file: Optional[str] = None,
     ):
         """
         Initialize the Simple SPARQL Agent with MCP support.
@@ -87,15 +85,25 @@ class SimpleSparqlAgentMCP:
         else:
             self.api_key = api_key or os.getenv('OPENAI_API_KEY')
             self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
-
-        # Set up MCP server
-        if mcp_server_args is None:
-            mcp_server_args = [
-                "run", "--with", "mcp[cli]", "--with", "rdflib", 
-                "--with", "oxrdflib", "mcp", "run", mcp_server_script
-            ]
         
-        self.mcp_server = MCPServerStdio("uv", args=mcp_server_args)
+        self.graph_file = graph_file 
+        
+        # Pass graph_file as environment variable to MCP server
+        mcp_env = os.environ.copy()  
+        if graph_file:  
+            mcp_env['GRAPH_FILE'] = graph_file  #
+        
+        mcp_server_args = [
+            "run", "--with", "mcp[cli]", "--with", "rdflib", 
+            "--with", "oxrdflib", "mcp", "run", mcp_server_script
+        ]
+        
+        # ADD env parameter
+        self.mcp_server = MCPServerStdio(
+            "uv", 
+            args=mcp_server_args,
+            env=mcp_env 
+        )
 
         # Set up the model
         self.model = OpenAIModel(
@@ -111,7 +119,8 @@ class SimpleSparqlAgentMCP:
             retries=3
         )
 
-        self.graph = graph
+        self.graph = Graph()
+        self.graph.parse(graph_file, format='turtle')
     async def generate_query(
         self,
         eval_data: Dict[str, Any],
@@ -129,29 +138,31 @@ class SimpleSparqlAgentMCP:
         system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
             f"Generate a complete SPARQL query to answer the user's question. "
-            f"You can use the provided MCP tools to look up ontology definitions. "
+            f"You can use the provided MCP tools to generate the query."
+            f"Use the sparql_query tool to ensure the final query is correct before returning the final result."
             f"Use up to {self.max_tool_calls} tool calls if needed.\n\n"
-            f"Knowledge graph context:\n```turtle\n{knowledge_graph_content}\n```"
         )
 
         user_message = f"Question: {nl_question}"
         
         try:
-            async with self.agent.run_mcp_servers():
-                result = await self.agent.run(
-                    user_message,
-                    message_history=[],
-                    system_prompt=system_prompt
-                )
-                
-                # Track tokens
-                if hasattr(result, '_usage') and result._usage:
-                    self.prompt_tokens += getattr(result._usage, 'request_tokens', 0)
-                    self.completion_tokens += getattr(result._usage, 'response_tokens', 0)
-                    self.total_tokens += getattr(result._usage, 'total_tokens', 0)
-                
-                generated_query = result.data.sparql_query
-                print(f"✅ Generated query:\n{generated_query}")
+            with capture_run_messages() as messages:
+                async with self.agent.run_mcp_servers():
+                    result = await self.agent.run(
+                        user_message,
+                        message_history=[],
+                        system_prompt=system_prompt
+                    )
+                    
+                    # Track tokens
+                    if hasattr(result, '_usage') and result._usage:
+                        self.prompt_tokens += getattr(result._usage, 'request_tokens', 0)
+                        self.completion_tokens += getattr(result._usage, 'response_tokens', 0)
+                        self.total_tokens += getattr(result._usage, 'total_tokens', 0)
+                    
+                    generated_query = result.data.sparql_query
+                    print(f"✅ Generated query:\n{generated_query}")
+                    pprint(messages)
                 
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
