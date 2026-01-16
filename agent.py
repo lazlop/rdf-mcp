@@ -154,16 +154,21 @@ class SimpleSparqlAgentMCP:
                         system_prompt=system_prompt
                     )
                     
-                    # Track tokens
-                    if hasattr(result, '_usage') and result._usage:
-                        self.prompt_tokens += getattr(result._usage, 'request_tokens', 0)
-                        self.completion_tokens += getattr(result._usage, 'response_tokens', 0)
-                        self.total_tokens += getattr(result._usage, 'total_tokens', 0)
+                    # track tokens
+                    if hasattr(result, 'usage'):
+                        usage = result.usage()
+                        if usage:
+                            self.prompt_tokens += usage.request_tokens
+                            self.completion_tokens += usage.response_tokens
+                            self.total_tokens += usage.total_tokens
                     
                     generated_query = result.data.sparql_query
                     print(f"✅ Generated query:\n{generated_query}")
-                    pprint(messages)
-                
+                    
+                    # Optional: Print message history for debugging
+                    if messages:
+                        print("\n📝 Message History:")
+                        pprint(messages)
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
             traceback.print_exc()
