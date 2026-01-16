@@ -6,12 +6,12 @@ get_entity_info - Retrieve all properties and relationships for a specific entit
 
 get_building_summary - Classes and their counts. Relationships and their counts.
 
+find_entities_by_type - List all entities of a given Brick class (e.g., all VAVs, all temperature sensors). Essential for understanding what exists in the building.
+
 
 
 Maybe
 get_hierarchy - Traverse spatial or equipment hierarchies (e.g., "show me everything in HVAC Zone 3" or "what's the structure under AHU-1").
-
-find_entities_by_type - List all entities of a given Brick class (e.g., all VAVs, all temperature sensors). Essential for understanding what exists in the building.
 
 get_relationships - Query specific relationship types (feeds, hasPoint, hasLocation, etc.) either globally or filtered by entity. Critical for understanding system topology.
 
