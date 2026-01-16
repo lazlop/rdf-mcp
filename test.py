@@ -46,11 +46,7 @@ async def test_query_generation():
     print("\n=== Test 2: Query Generation ===")
     
     ttl_path = 'test-building.ttl'
-    
-    # Create test CSV logger
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as log_f:
-        log_path = log_f.name
-
+    log_path = 'test-logger.csv'
     logger = CsvLogger(log_path)
     
     eval_data = {
@@ -84,45 +80,12 @@ async def test_query_generation():
         graph_file=ttl_path
     )
     
-    
-    # Note: This will fail without real API credentials
-    # It's mainly to test the flow
     try:
         await agent.generate_query(eval_data, logger, prefixes, kg_content)
         print("✅ Query generation completed")
     except Exception as e:
         print(f"⚠️  Query generation failed (expected without real API): {e}")
        
-
-def test_run_agent_function():
-    """Test the convenience run_agent function."""
-    print("\n=== Test 3: run_agent Function ===")
-    
-    ttl_path = 'test-building.ttl'
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as log_f:
-        log_path = log_f.name
-    
-    logger = CsvLogger(log_path)
-    eval_data = {
-        'query_id': 'test_002',
-        'question': 'Test question',
-        'ground_truth_sparql': 'SELECT ?s WHERE { ?s a ?type }'
-    }
-    
-    try:
-        run_agent(
-            sparql_endpoint=ttl_path,
-            eval_data=eval_data,
-            logger=logger,
-            prefixes="",
-            knowledge_graph_content="",
-            model_name="gpt-4",
-            api_key="test-key"
-        )
-        print("✅ run_agent function executed")
-    except Exception as e:
-        print(f"⚠️  run_agent failed (expected without real API): {e}")
-
 
 
 async def main():
@@ -131,7 +94,6 @@ async def main():
     
     await test_basic_initialization()
     await test_query_generation()
-    # test_run_agent_function()
     
     print("\n✨ Tests complete!")
 
