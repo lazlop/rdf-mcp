@@ -1,7 +1,7 @@
 from mcp.server.fastmcp import FastMCP
-from rdflib import Graph, URIRef, Literal, Namespace, BRICK, RDFS, RDF
+from rdflib import Graph, URIRef, Literal, Namespace, BRICK, RDFS, RDF, BNode
 from rdflib.term import Variable
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from smash import smash_distance
 import sys
 
@@ -12,8 +12,9 @@ ontology = Graph().parse("https://brickschema.org/schema/1.4/Brick.ttl")
 @mcp.tool()
 def get_subgraph_with_hops(
     central_node: str | URIRef,
+    graph: Graph,
     num_hops: int = 1,
-    get_classes: bool = False
+    get_classes: bool = False,
 ) -> str:
     """
     Extract a subgraph containing all triples within num_hops from central_node,
@@ -109,7 +110,7 @@ def _format_rdflib_results(qres) -> Dict[str, Any]:
     
     return {"results": bindings, "variables": variables}
 @mcp.tool()
-def run_sparql_query(graph, query: str) -> Dict[str, Any]:
+def run_sparql_query(query: str, graph: Graph) -> Dict[str, Any]:
     """
     Executes a SPARQL query, dispatching to rdflib 
     """
