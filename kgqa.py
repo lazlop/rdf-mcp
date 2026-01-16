@@ -80,3 +80,65 @@ def get_subgraph_with_hops(
                 subgraph.add((o, RDF.type, class_uri))
     
     return subgraph.serialize(format="turtle")
+
+def _format_rdflib_results(qres) -> Dict[str, Any]:
+    """Converts rdflib QueryResult to the same dict format as SPARQLWrapper."""
+    variables = [str(v) for v in qres.vars]
+    bindings = []
+    for row in qres:
+        binding_row = {}
+        for var_name in variables:
+            term = row[var_name]
+            if term is None:
+                continue
+            
+            term_dict = {}
+            if isinstance(term, URIRef):
+                term_dict = {'type': 'uri', 'value': str(term)}
+            elif isinstance(term, Literal):
+                term_dict = {'type': 'literal', 'value': str(term)}
+                if term.datatype:
+                    term_dict['datatype'] = str(term.datatype)
+                if term.language:
+                    term_dict['xml:lang'] = term.language
+            elif isinstance(term, BNode):
+                term_dict = {'type': 'bnode', 'value': str(term)}
+            
+            binding_row[var_name] = term_dict
+        bindings.append(binding_row)
+    
+    return {"results": bindings, "variables": variables}
+@mcp.tool()
+def run_sparql_query(graph, query: str) -> Dict[str, Any]:
+    """
+    Executes a SPARQL query, dispatching to rdflib 
+    """
+    print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
+
+    try:
+        qres = graph.query(query)
+        formatted_results = _format_rdflib_results(qres)
+        bindings = formatted_results["results"]
+        summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
+        if not bindings:
+            summary = "The query executed successfully on the local graph but returned no results."
+        
+        return {
+            "summary_string": summary,
+            "results": bindings,
+            "row_count": len(bindings),
+            "col_count": len(formatted_results["variables"]),
+            "syntax_ok": True,
+            "error_message": None
+        }
+    except Exception as e:
+        print(f"   -> SPARQL Query (local) Failed: {e}")
+        error_msg = f"The query failed to parse with the following error: {str(e)}"
+        return {
+            "summary_string": error_msg,
+            "results": [],
+            "row_count": 0,
+            "col_count": 0,
+            "syntax_ok": False,
+            "error_message": str(e)
+        }
