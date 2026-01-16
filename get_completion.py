@@ -46,7 +46,7 @@ Use the tool to determine what properties a term can have. Only use the predicat
 Output a turtle file with the Brick model.
 """
 
-prompt = """what is the brick class that represents an air handling unit. Provide a final response with only the brick class name
+prompt = """what is the brick class that represents a temperature sensor.
 """
 async def main():
     with capture_run_messages() as messages:
