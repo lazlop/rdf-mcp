@@ -1,5 +1,0 @@
-Build a Brick model of this system
-
-Look up definitions of concepts and their relationships to ensure you are building a valid Brick model. Use the more specific classes you can. Do not hallucinate predicates. Use the definitions of terms to determine what the required predicates are and make sure to add those to the graph. If you encounter abbreviations or short words that are not clearly a concept, use the tool to expand the abbreviation and make an educated guess. Use the tool to determine what properties a term can have. Only use the predicates defined by the ontology.
-
-Output the Brick model as a turtle file. Make sure to include an owl:Ontology declaration that imports the Brick ontology. 
