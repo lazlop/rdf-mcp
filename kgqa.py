@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 from rdflib import Graph, URIRef, Literal, Namespace, BRICK, RDFS, RDF, BNode
+from namespaces import bind_prefixes, get_prefixes
 from rdflib.term import Variable
 from typing import List, Optional, Dict, Any
 import os 
@@ -18,12 +19,18 @@ def _ensure_graph_loaded():
     if graph is None:
         graph_file = os.getenv("GRAPH_FILE")
         if not graph_file:
-            raise ValueError("GRAPH_FILE environment variable not set")
+            # Attempt to fall back to a default test graph if the environment variable is not set
+            default_path = os.path.join(os.path.dirname(__file__), "test-building.ttl")
+            if os.path.exists(default_path):
+                graph_file = default_path
+            else:
+                raise ValueError("GRAPH_FILE environment variable not set and default test graph not found")
         if not os.path.exists(graph_file):
             raise FileNotFoundError(f"Graph file not found: {graph_file}")
         
         graph = Graph(store='Oxigraph')
         graph.parse(graph_file)
+        bind_prefixes(graph)
         print(f"✅ Loaded graph from {graph_file} ({len(graph)} triples)")
     return graph
 
@@ -564,7 +571,9 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     g = _ensure_graph_loaded() 
         
     try:
-        qres = g.query(query) 
+        prefixes = get_prefixes(g)
+        full_query = prefixes + "\n" + query
+        qres = g.query(full_query)
         formatted_results = _format_rdflib_results(qres)
         bindings = formatted_results["results"][:result_length]
         summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
