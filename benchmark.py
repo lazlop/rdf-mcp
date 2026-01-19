@@ -20,6 +20,7 @@ if not config_path.is_file():
     sys.exit(1)
 
 config = json.load(open(config_path))
+EXCLUDE_BUILDINGS = config.get("exclude-buildings", [])
 
 # Configuration - update these with your actual values
 MODEL_NAME = config.get("models", [None])[0]
@@ -171,14 +172,13 @@ async def main_async() -> None:
         return
 
     print(f"\nFound {len(json_files)} building files to process:")
-    for jf in json_files:
-        print(f"  - {jf.name}")
-
     for idx, json_path in enumerate(json_files, start=1):
         print("\n" + "#" * 60)
         print(f"Building {idx}/{len(json_files)}: {json_path.name}")
         print("#" * 60)
-
+        if any(exc in json_path.name for exc in EXCLUDE_BUILDINGS):
+            print(f"Skipping excluded building {json_path.name}")
+            continue
         try:
             json_data = load_json_file(json_path)
             await process_building_queries(json_data, logger)
@@ -193,6 +193,10 @@ async def main_async() -> None:
     print("Benchmark run completed!")
     print(f"Results logged to: {log_filename}")
     print("=" * 60)
+    for jf in json_files:
+        print(f"  - {jf.name}")
+
+# Loop moved inside main_async
 
 
 if __name__ == "__main__":

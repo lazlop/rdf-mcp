@@ -135,6 +135,44 @@ class SimpleSparqlAgentMCP:
             mcp_servers=[self.mcp_server],
             retries=3
         )
+
+    # -------------------------------------------------------------------------
+    # Exponential backoff helper
+    # -------------------------------------------------------------------------
+    async def _exponential_backoff(self, coro, *args, delays: List[int] = [5*60, 15*60, 30*60]):
+        """
+        Retry an async callable with exponential backoff.
+
+        Parameters
+        ----------
+        coro : Callable
+            The coroutine function to execute.
+        *args :
+            Arguments to pass to the coroutine.
+        delays : List[int]
+            List of delays (in seconds) between retries. Defaults to 5, 15, 30 minutes.
+
+        Returns
+        -------
+        Any
+            The result of the successful coroutine call.
+
+        Raises
+        ------
+        Exception
+            Propagates the last exception if all retries fail.
+        """
+        last_exc = None
+        for i, delay in enumerate(delays):
+            try:
+                return await coro(*args)
+            except Exception as exc:
+                last_exc = exc
+                if i == len(delays) - 1:
+                    break
+                await asyncio.sleep(delay)
+        raise last_exc
+
     async def generate_query(
         self,
         eval_data: Dict[str, Any],
@@ -162,11 +200,13 @@ class SimpleSparqlAgentMCP:
         try:
             with capture_run_messages() as messages:
                 async with self.agent.run_mcp_servers():
-                    result = await self.agent.run(
-                        user_message,
-                        message_history=[],
-                        system_prompt=system_prompt
-                    )
+                    async def _run_agent():
+                        return await self.agent.run(
+                            user_message,
+                            message_history=[],
+                            system_prompt=system_prompt
+                        )
+                    result = await self._exponential_backoff(_run_agent)
                     
                     # track tokens
                     if hasattr(result, 'usage'):
@@ -214,11 +254,14 @@ class SimpleSparqlAgentMCP:
             logger.log(log_entry)
             return
 
-        # Evaluate
-        print("\n--- Evaluation ---")
-        gen_results_obj = sparql_query(generated_query, result_length = -1)
-        gt_results_obj = sparql_query(ground_truth_sparql, result_length = -1) if ground_truth_sparql else None
+        # -----------------------------------------------------------------
+        # Evaluate with exponential backoff
+        # unnecessary, but also don't need to remove. 
+        # -----------------------------------------------------------------
         
+        gen_results_obj = sparql_query(generated_query, result_length = -1)
+        if ground_truth_sparql:
+            gt_results_obj = sparql_query(ground_truth_sparql, result_length = -1)        
         # Calculate metrics
         arity_f1, entity_set_f1, row_matching_f1, exact_match_f1 = 0.0, 0.0, 0.0, 0.0
         less_columns_flag = False
