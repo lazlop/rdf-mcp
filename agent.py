@@ -48,7 +48,7 @@ class SimpleSparqlAgentMCP:
 
     def __init__(
         self, 
-        sparql_endpoint: str, 
+        sparql_endpoint: str, # just a graph file for now
         model_name: str = "lbl/cborg-coder",
         max_tool_calls: int = 10,
         max_iterations: int = 2,
@@ -56,7 +56,6 @@ class SimpleSparqlAgentMCP:
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
         mcp_server_script: str = "kgqa.py",
-        graph_file: Optional[str] = None,
     ):
         """
         Initialize the Simple SPARQL Agent with MCP support.
@@ -87,11 +86,26 @@ class SimpleSparqlAgentMCP:
         else:
             self.api_key = api_key or os.getenv('OPENAI_API_KEY')
             self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
-        
-        self.graph_file = graph_file 
-        
+
+        self.is_remote = sparql_endpoint.lower().startswith("http")
+
+        if self.is_remote:
+            raise NotImplementedError("Remote SPARQL endpoints are not supported in this simplified agent.")
+        else:
+            print(f"🗂️ Local TTL file mode activated. Loading graph from: {self.sparql_endpoint_url}")
+            if not os.path.exists(self.sparql_endpoint_url):
+                print(f"   -> ❌ ERROR: File not found at {self.sparql_endpoint_url}. Queries will fail.")
+                return
+            try:
+                self.graph = Graph()
+                self.graph.parse(self.sparql_endpoint_url, format="turtle")
+                print(f"   -> ✅ Graph loaded successfully with {len(self.graph)} triples.")
+            except Exception as e:
+                print(f"   -> ❌ ERROR: Failed to load or parse the TTL file: {e}")
+                self.graph = None
+
         # Pass graph_file as environment variable to MCP server
-        os.environ['GRAPH_FILE'] = graph_file
+        os.environ['GRAPH_FILE'] = self.sparql_endpoint_url
         mcp_env = os.environ.copy()          
         mcp_server_args = [
             "run", "--with", "mcp[cli]", "--with", "rdflib", 
@@ -118,9 +132,6 @@ class SimpleSparqlAgentMCP:
             mcp_servers=[self.mcp_server],
             retries=3
         )
-
-        self.graph = Graph()
-        self.graph.parse(graph_file, format='turtle')
     async def generate_query(
         self,
         eval_data: Dict[str, Any],
@@ -224,7 +235,7 @@ class SimpleSparqlAgentMCP:
 
 
 def run_agent(
-    
+    sparql_endpoint: str,
     eval_data: Dict[str, Any],
     logger: CsvLogger,
     prefixes: str,

@@ -31,7 +31,6 @@ async def test_basic_initialization():
         max_tool_calls=5,
         api_key=API_KEY,
         base_url=BASE_URL,
-        graph_file=ttl_path
     )
     
     print(f"✅ Agent initialized")
@@ -77,7 +76,6 @@ async def test_query_generation():
         max_tool_calls=5,
         api_key=API_KEY,
         base_url=BASE_URL,
-        graph_file=ttl_path
     )
     
     try:
