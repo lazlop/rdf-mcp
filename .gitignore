@@ -37,3 +37,6 @@ venv.bak/
 *.swp                                                                                                                                                                                                
 *.swo                                                                                                                                                                                                
 .DS_Store  
+
+# additional ignores
+*config.json
