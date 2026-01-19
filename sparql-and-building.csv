@@ -1,0 +1,327 @@
+query_id,question_number,source,question,model,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens
+LBNL_001,,,"Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.",lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX ex: <http://example.org/>
+SELECT DISTINCT ?zone WHERE {
+  ?zone a ex:Zone .
+  {
+    ?zone ex:hasProperty ?property .
+  } UNION {
+    ?zone (ex:connectedTo|ex:isPartOf|ex:adjacentTo)* ?rds .
+    ?rds a ex:RoomDomainSpace .
+    ?rds ex:hasProperty ?property .
+  }
+}",True,False,False,353,4,0,1,0.4,0.0,0.0,0.0,True,1251,1240,2491
+LBNL_001,,,"For each Zone that either has a Property directly or has a RoomDomainSpace reached by two connected steps and a contains relationship leading to a Property, what is the label of that Property and what are the external reference alc endpoint and mpc endpoint when writable is False?",lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?zone ?propLabel ?alcEndpoint ?mpcEndpoint WHERE {
+  {
+    # Direct property of the Zone
+    ?zone s223:hasProperty ?prop .
+  } UNION {
+    # Two-step connection to a RoomDomainSpace that contains the Property
+    ?zone ?p1 ?inter .
+    ?inter ?p2 ?rds .
+    ?rds a s223:RoomDomainSpace ;
+         s223:contains ?prop .
+  }
+  # Property label
+  ?prop rdfs:label ?propLabel .
+  # External reference details (only when writable is false)
+  ?prop s223:externalReference ?ext .
+  ?ext s223:alcEndpoint ?alcEndpoint ;
+       s223:mpcEndpoint ?mpcEndpoint ;
+       s223:writable ?writable .
+  FILTER(?writable = false)
+}",True,False,False,353,4,0,4,1.0,0.0,0.0,0.0,False,4546,2029,6575
+LBNL_001,,,List the labels of all non-writable properties for zones and show the corresponding alc endpoint and mpc database endpoint for each.,lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX ex: <http://example.org/>
+
+SELECT ?label ?alcEndpoint ?mpcEndpoint WHERE {
+  ?prop a rdf:Property .
+  ?prop rdfs:domain ex:Zone .
+  ?prop ex:writable false .
+  ?prop rdfs:label ?label .
+  OPTIONAL { ?prop ex:alcEndpoint ?alcEndpoint . }
+  OPTIONAL { ?prop ex:mpcDatabaseEndpoint ?mpcEndpoint . }
+}",True,False,False,353,4,0,3,0.8571428571428571,0.0,0.0,0.0,True,196,726,922
+LBNL_001,,,What alc and mpc endpoints are defined for the read-only properties of each zone?,lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX brick: <https://brickschema.org/schema/Brick#>
+SELECT ?zone ?prop ?alc ?mpc WHERE {
+  ?zone a s223:Zone .
+  ?zone s223:hasProperty ?prop .
+  OPTIONAL { ?prop brick:writable ?w . }
+  FILTER (!BOUND(?w) || ?w = false)
+  OPTIONAL { ?prop brick:alc_endpoint ?alc . }
+  OPTIONAL { ?prop brick:mpc_endpoint ?mpc . }
+}
+ORDER BY ?zone ?prop",True,True,False,353,4,259,4,1.0,0.0,0.0,0.0,False,179816,7217,187033
+LBNL_001,,,How can I find the alc and mpc endpoints for zone properties that aren't editable?,lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX ex: <http://example.org/>
+SELECT ?zone ?property ?alcEndpoint ?mpcEndpoint
+WHERE {
+  ?zone a ex:Zone .
+  ?zone ex:hasProperty ?property .
+  ?property ex:editable false .
+  OPTIONAL { ?property ex:alcEndpoint ?alcEndpoint . }
+  OPTIONAL { ?property ex:mpcEndpoint ?mpcEndpoint . }
+  FILTER (BOUND(?alcEndpoint) || BOUND(?mpcEndpoint))
+}
+ORDER BY ?zone ?property",True,False,False,353,4,0,4,1.0,0.0,0.0,0.0,False,2606,2235,4841
+LBNL_002,,,"Identify each entity that is an AHU, and either has a directly associated property or is indirectly connected to a property via a connectable.",lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?targetLabel ?label ?alc_endpoint ?mpc_endpoint WHERE {
+?target a s223:AirHandlingUnit;
+rdfs:label ?targetLabel.
+{
+?target s223:contains ?connectable.
+
+?connectable (s223:observes | s223:hasProperty) ?prop .
+}
+UNION
+{
+?target s223:hasProperty ?prop .
+}
+
+?prop a s223:Property;
+rdfs:label ?label;
+s223:hasExternalReference ?ref.
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint ;
+ref:writable ""False"" .
+
+FILTER(CONTAINS(LCASE(?targetLabel), ""rtu""))
+
+}","PREFIX ex: <http://example.org/>
+SELECT DISTINCT ?ahu WHERE {
+  ?ahu a ex:AHU .
+  {
+    ?ahu ex:hasProperty ?prop .
+  } UNION {
+    ?ahu ex:hasConnectable ?conn .
+    ?conn ex:connectsTo ?prop .
+  }
+}",True,False,False,117,4,0,1,0.4,0.0,0.0,0.0,True,199,416,615
+LBNL_002,,,"For each Air Handling Unit (AHU) whose label includes 'RTU', what are the related non-writable property labels and ALC and MPC endpoint references?",lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?targetLabel ?label ?alc_endpoint ?mpc_endpoint WHERE {
+?target a s223:AirHandlingUnit;
+rdfs:label ?targetLabel.
+{
+?target s223:contains ?connectable.
+
+?connectable (s223:observes | s223:hasProperty) ?prop .
+}
+UNION
+{
+?target s223:hasProperty ?prop .
+}
+
+?prop a s223:Property;
+rdfs:label ?label;
+s223:hasExternalReference ?ref.
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint ;
+ref:writable ""False"" .
+
+FILTER(CONTAINS(LCASE(?targetLabel), ""rtu""))
+
+}","PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX ex: <http://example.com/ontology#>
+
+SELECT ?ahuLabel ?propLabel ?alcEndpoint ?mpcEndpoint WHERE {
+  ?ahu a ex:AirHandlingUnit ;
+       rdfs:label ?ahuLabel .
+  FILTER regex(?ahuLabel, ""RTU"", ""i"") .
+  ?prop rdfs:domain ?ahu ;
+        rdfs:label ?propLabel ;
+        ex:writable false .
+  OPTIONAL { ?prop ex:hasALCEndpoint ?alcEndpoint . }
+  OPTIONAL { ?prop ex:hasMPCEndpoint ?mpcEndpoint . }
+}",True,False,False,117,4,0,4,1.0,0.0,0.0,0.0,False,204,773,977
+LBNL_002,,,"For each air handling unit whose label contains rtu, identify any connectable element it contains that observes or has property a property, or any property it has directly, and for each property give its label along with the ALC endpoint and the MPC database name from its external reference",lbl/cborg-coder,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?targetLabel ?label ?alc_endpoint ?mpc_endpoint WHERE {
+?target a s223:AirHandlingUnit;
+rdfs:label ?targetLabel.
+{
+?target s223:contains ?connectable.
+
+?connectable (s223:observes | s223:hasProperty) ?prop .
+}
+UNION
+{
+?target s223:hasProperty ?prop .
+}
+
+?prop a s223:Property;
+rdfs:label ?label;
+s223:hasExternalReference ?ref.
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint ;
+ref:writable ""False"" .
+
+FILTER(CONTAINS(LCASE(?targetLabel), ""rtu""))
+
+}","PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX bf: <https://example.org/buildingfacade#>
+
+SELECT DISTINCT ?ahu ?ahuLabel ?property ?propertyLabel ?endpoint ?dbName WHERE {
+  # Air handling units whose label contains ""rtu""
+  ?ahu a brick:Air_Handling_Unit ;
+       rdfs:label ?ahuLabel .
+  FILTER regex(?ahuLabel, ""rtu"", ""i"")
+
+  # Either a property directly attached to the AHU
+  { 
+    ?ahu bf:hasProperty ?property .
+  }
+  UNION
+  # Or a property attached to a connectable element contained in the AHU
+  {
+    ?ahu bf:hasPart ?elem .
+    ?elem a bf:ConnectableElement .
+    { ?elem bf:observes ?property } UNION { ?elem bf:hasProperty ?property }
+  }
+
+  # Pull the property label
+  ?property rdfs:label ?propertyLabel .
+
+  # External reference – endpoint (ALC) and MPC database name, if present
+  OPTIONAL {
+    ?property bf:hasExternalReference ?ref .
+    OPTIONAL { ?ref bf:hasEndpoint ?endpoint . }
+    OPTIONAL { ?ref bf:hasDatabaseName ?dbName . }
+  }
+}
+",True,False,False,117,4,0,6,0.8,0.0,0.0,0.0,False,226,1173,1399

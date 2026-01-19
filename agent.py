@@ -180,10 +180,10 @@ class SimpleSparqlAgentMCP:
                     print(f"✅ Generated query:\n{generated_query}")
                     
                     # Optional: Print message history for debugging
-                    if messages:
-                        # Saving message history 
-                        with open(f"message_history.json", 'w') as f:
-                            json.dump(messages, f, indent=2)
+            if messages:
+                # Save messages safely (handles non‑serializable objects)
+                with open("message_history.json", "w") as f:
+                    json.dump(messages, f, indent=2, default=str)
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
             traceback.print_exc()
@@ -191,12 +191,33 @@ class SimpleSparqlAgentMCP:
 
         if not generated_query:
             print("💔 Could not generate a query")
+            log_entry = {
+            **eval_data,
+            'model': self.model_name,
+            'generated_sparql': generated_query,
+            'syntax_ok': False,
+            'returns_results': False,
+            'perfect_match': False,
+            'gt_num_rows': 0,
+            'gt_num_cols': 0,
+            'gen_num_rows': 0,
+            'gen_num_cols': 0,
+            'arity_matching_f1': 0.0,
+            'entity_set_f1': 0.0,
+            'row_matching_f1': 0.0,
+            'exact_match_f1': 0.0,
+            'less_columns_flag': True,
+            'prompt_tokens': self.prompt_tokens,
+            'completion_tokens': self.completion_tokens,
+            'total_tokens': self.total_tokens
+        }
+            logger.log(log_entry)
             return
 
         # Evaluate
         print("\n--- Evaluation ---")
         gen_results_obj = sparql_query(generated_query, result_length = -1)
-        gt_results_obj = sparql_query(ground_truth_sparql) if ground_truth_sparql else None
+        gt_results_obj = sparql_query(ground_truth_sparql, result_length = -1) if ground_truth_sparql else None
         
         # Calculate metrics
         arity_f1, entity_set_f1, row_matching_f1, exact_match_f1 = 0.0, 0.0, 0.0, 0.0

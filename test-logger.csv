@@ -53,3 +53,22 @@ SELECT ?fan ?fanLabel WHERE {
   OPTIONAL { ?fan rdfs:label ?fanLabel . }
 }
 ORDER BY ?fan",True,False,True,0,1,0,2,0.6666666666666666,1.0,1.0,1.0,False,2076,884,2960
+test_001,,,What fans are part of AHU1?,lbl/cborg-coder,"
+            PREFIX brick: <https://brickschema.org/schema/Brick#>
+            PREFIX ex: <http://example.org/>
+            SELECT ?fan WHERE {
+                ex:AHU1 brick:hasPart ?fan .
+                ?fan a brick:Fan .
+            }
+        ","PREFIX brick: <https://brickschema.org/schema/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?fan ?fanLabel WHERE {
+  # Identify the Air Handling Unit named AHU1
+  ?ahu a brick:Air_Handling_Unit ;
+       rdfs:label ""AHU1"" .
+  # Find its parts that are fans
+  ?ahu brick:hasPart ?fan .
+  ?fan a brick:Fan .
+  OPTIONAL { ?fan rdfs:label ?fanLabel }
+}",True,False,True,0,1,0,2,0.6666666666666666,1.0,1.0,1.0,False,9347,795,10142
