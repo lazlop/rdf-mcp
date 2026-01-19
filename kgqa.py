@@ -5,11 +5,12 @@ from rdflib.term import Variable
 from typing import List, Optional, Dict, Any
 import os 
 import sys
+import signal
 
 mcp = FastMCP("GraphDemo", dependencies=["rdflib", "oxrdflib"])
 
 # ontology can be brick or 223 
-ontology = Graph().parse("https://brickschema.org/schema/1.4/Brick.ttl")
+ontology = Graph(store = "Oxigraph").parse("https://brickschema.org/schema/1.4/Brick.ttl")
 
 graph = None
 
@@ -562,15 +563,21 @@ def _format_rdflib_results(qres) -> Dict[str, Any]:
         bindings.append(binding_row)
     
     return {"results": bindings, "variables": variables}
+def _timeout_handler(signum, frame):
+    raise TimeoutError("SPARQL query timed out after 60 seconds")
+
 @mcp.tool()
 def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     """
-    Executes a SPARQL query, dispatching to rdflib 
+    Executes a SPARQL query with a timeout (default 60 seconds). If the query exceeds the timeout,
+    returns an error message asking for a more specific query.
     """
-    print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
-    g = _ensure_graph_loaded() 
-        
+    # Set alarm for timeout
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(60)  # 60 seconds timeout
     try:
+        print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
+        g = _ensure_graph_loaded()
         prefixes = get_prefixes(g)
         full_query = prefixes + "\n" + query
         qres = g.query(full_query)
@@ -579,7 +586,6 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
         summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
         if not bindings:
             summary = "The query executed successfully on the local graph but returned no results."
-        
         return {
             "summary_string": summary,
             "results": bindings,
@@ -587,6 +593,16 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
             "col_count": len(formatted_results["variables"]),
             "syntax_ok": True,
             "error_message": None
+        }
+    except TimeoutError as te:
+        print(f"   -> SPARQL Query timed out: {te}")
+        return {
+            "summary_string": "Query timed out after 60 seconds. Please provide a more specific SPARQL query.",
+            "results": [],
+            "row_count": 0,
+            "col_count": 0,
+            "syntax_ok": False,
+            "error_message": str(te)
         }
     except Exception as e:
         print(f"   -> SPARQL Query (local) Failed: {e}")
@@ -599,3 +615,5 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
             "syntax_ok": False,
             "error_message": str(e)
         }
+    finally:
+        signal.alarm(0)

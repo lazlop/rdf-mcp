@@ -76,6 +76,7 @@ class SimpleSparqlAgentMCP:
         self.prompt_tokens = 0
         self.completion_tokens = 0
         self.total_tokens = 0
+        self.messages = []
 
         # Load API credentials
         if api_key:
@@ -100,7 +101,7 @@ class SimpleSparqlAgentMCP:
                 print(f"   -> ❌ ERROR: File not found at {self.sparql_endpoint_url}. Queries will fail.")
                 return
             try:
-                self.graph = Graph()
+                self.graph = Graph(store = "Oxigraph")
                 self.graph.parse(self.sparql_endpoint_url, format="turtle")
                 print(f"   -> ✅ Graph loaded successfully with {len(self.graph)} triples.")
             except Exception as e:
@@ -221,9 +222,7 @@ class SimpleSparqlAgentMCP:
                     
                     # Optional: Print message history for debugging
             if messages:
-                # Save messages safely (handles non‑serializable objects)
-                with open("message_history.json", "w") as f:
-                    json.dump(messages, f, indent=2, default=str)
+                self.messages += [str(msg) for msg in messages]
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
             traceback.print_exc()
@@ -235,6 +234,7 @@ class SimpleSparqlAgentMCP:
             **eval_data,
             'model': self.model_name,
             'generated_sparql': generated_query,
+            'message_history': "\n".join(self.messages),
             'syntax_ok': False,
             'returns_results': False,
             'perfect_match': False,

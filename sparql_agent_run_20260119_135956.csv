@@ -1,0 +1,386 @@
+query_id,question_number,source,question,model,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens
+MORTAR_001,,,What are the brick points in this graph?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },SELECT ?point WHERE { ?point a <https://brickschema.org/schema/1.1/Brick#Point> . },True,False,False,1346,2,0,1,0.6666666666666666,0.0,0.0,0.0,True,199,290,489
+MORTAR_001,,,Can you find nodes that has information about an external reference?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?node ?externalReference WHERE {
+  ?node rdfs:seeAlso ?externalReference .
+}",True,True,False,1346,2,52,2,1.0,0.0,0.0,0.0,False,202,197,399
+MORTAR_001,,,What points does this graph have?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?x ?y WHERE {
+  GRAPH <http://example.org/graph> {
+    ?point a <http://example.org/ontology/Point> ;
+           <http://example.org/ontology/x> ?x ;
+           <http://example.org/ontology/y> ?y .
+  }
+}",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,474,551,1025
+MORTAR_001,,,What data sources I have in my system?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },SELECT DISTINCT ?source WHERE { ?source a ?type . FILTER(?type != rdf:Property && ?type != owl:Class && ?type != rdfs:Class) } LIMIT 100,True,True,False,1346,2,99,1,0.6666666666666666,0.0,0.0,0.0,True,8084,1119,9203
+MORTAR_001,,,Which entities that are instances of Point (including its subclasses) have which types?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX : <#>
+SELECT ?entity ?type WHERE {
+  ?entity rdf:type ?type .
+  ?type rdfs:subClassOf* :Point .
+}",False,False,False,1346,2,0,0,0.0,0.0,0.0,0.0,False,206,314,520
+MORTAR_001,,,What point entities exist and what types are they assigned?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?entity ?type WHERE {
+  ?entity a ?type .
+  FILTER regex(str(?type), ""Point"", ""i"")
+} LIMIT 100",True,True,False,1346,2,99,2,1.0,0.13702422145328721,0.15303531215562263,0.13702422145328721,False,17580,676,18256
+MORTAR_001,,,List all measurement points along with their categories.,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX ex: <http://example.org/ontology#>
+SELECT ?measurementPoint ?category WHERE {
+  ?measurementPoint a ex:MeasurementPoint .
+  ?measurementPoint ex:hasCategory ?category .
+}
+ORDER BY ?measurementPoint",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,199,214,413
+MORTAR_001,,,What data points are defined in the building model and how are they classified?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX ex: <http://example.org/building#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?dataPoint ?dataPointLabel ?classification ?classificationLabel
+WHERE {
+  # Data points defined in the building model
+  ?dataPoint a ex:DataPoint .
+  OPTIONAL { ?dataPoint rdfs:label ?dataPointLabel . }
+  
+  # Classification of each data point (e.g., temperature, humidity, occupancy, etc.)
+  OPTIONAL {
+    ?dataPoint ex:hasClassification ?classification .
+    OPTIONAL { ?classification rdfs:label ?classificationLabel . }
+  }
+}
+ORDER BY ?dataPoint",True,False,False,1346,2,0,4,0.6666666666666666,0.0,0.0,0.0,False,205,401,606
+MORTAR_001,,,Which data points does the system include and how are they grouped?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX ex: <http://example.org/ontology/>
+SELECT ?dataPoint ?group WHERE {
+  ?system a ex:System .
+  ?system ex:hasDataPoint ?dataPoint .
+  OPTIONAL { ?dataPoint ex:belongsToGroup ?group . }
+}",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,203,382,585
+MORTAR_002,,,Find all equipment and its points that are Zone Air Temperature Setpoints,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX bf: <https://brickschema.org/schema/1.3/BrickFrame#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?equipment ?equipmentLabel ?point ?pointLabel WHERE {
+  ?equipment a brick:Equipment .
+  ?point a brick:Zone_Air_Temperature_Setpoint .
+  ?point bf:isPointOf ?equipment .
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel . }
+  OPTIONAL { ?point rdfs:label ?pointLabel . }
+}",True,False,False,221,2,0,4,0.6666666666666666,0.0,0.0,0.0,False,203,448,651
+MORTAR_002,,,What equipment has setpoints for zone air temperature and what are they?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"The only equipment in the model that have Zone_Air_Temperature_Setpoint points are the Air_Handling_Units (AHU05, AHU06, AHU07, AHU08, AHU09). Each AHU owns a collection of points whose IRIs follow the pattern:
+
+    <building-namespace>#<building>.ZONE.<AHU-ID>.<ROOM-ID>.Zone_Air_Temp_Setpoint
+
+These points are all typed as brick:Zone_Air_Temperature_Setpoint. Below is a concise table showing each AHU and a few representative setpoint IRIs (the full model contains >350 such points).
+
+Equipment (AHU) | Sample Zone‑Air‑Temperature‑Setpoint IRIs
+--- | ---
+AHU09 (Air_Handling_Unit) | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM410.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM4-0605.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM2-0611.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM1-0628.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM0609.Zone_Air_Temp_Setpoint
+AHU08 (Air_Handling_Unit) | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU08.RM1005-2.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU08.RM1005-1.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU08.RM1002.Zone_Air_Temp_Setpoint
+AHU07 (Air_Handling_Unit) | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU07.RM6202.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU07.RM6103.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU07.RM5206.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU07.RM4202.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU07.RM1202_MIX.Zone_Air_Temp_Setpoint
+AHU06 (Air_Handling_Unit) | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM6321.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM6315.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM6312.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM5315.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM5303.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM4340.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM3321.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM2319.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU06.RM1319.Zone_Air_Temp_Setpoint
+AHU05 (Air_Handling_Unit) | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM6521_MIX.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM6515.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM6512.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM6503.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM5521.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM5515.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM4517.Zone_Air_Temp_Setpoint  
+ | http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU05.RM4503.Zone_Air_Temp_Setpoint
+
+All of the above IRIs are instances of brick:Zone_Air_Temperature_Setpoint, and each is linked to its respective AHU via the brick:hasPoint relationship.",False,False,False,221,2,0,0,0.0,0.0,0.0,0.0,False,91199,6725,97924
+MORTAR_002,,,What are the Zone Air Temperature Setpoints and the equipment they belong to?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX bf: <http://example.org/building#>
+SELECT ?setpoint ?value ?equipment
+WHERE {
+  ?setpoint a bf:ZoneAirTemperatureSetpoint ;
+            bf:hasNumericValue ?value ;
+            bf:isPartOf ?equipment .
+}
+ORDER BY ?setpoint",True,False,False,221,2,0,3,0.8,0.0,0.0,0.0,False,205,253,458
+MORTAR_002,,,Which equipment regulates the air temperature in rooms,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/1.0.2/Brick#>
+SELECT DISTINCT ?equipment WHERE {
+  ?equipment a brick:Equipment .
+  ?equipment brick:hasFunction brick:Regulate_Air_Temperature .
+  ?equipment brick:hasLocation ?room .
+  ?room a brick:Room .
+}",True,False,False,221,2,0,1,0.6666666666666666,0.0,0.0,0.0,True,198,491,689
+MORTAR_002,,,"For each point that is a zone air temperature setpoint, which equipment has that point?",lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?point ?equipment WHERE {
+  ?point a brick:Zone_Air_Temperature_Setpoint .
+  ?equipment brick:hasPoint ?point .
+}",True,False,False,221,2,0,2,1.0,0.0,0.0,0.0,False,208,386,594
+MORTAR_002,,,"Which devices include points that set the air temperature in a zone, and what are those points?",lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/1.4/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?device ?deviceLabel ?point ?pointLabel ?zone ?zoneLabel WHERE {
+  # Equipment (or any subclass thereof) that has a point
+  ?device a/rdfs:subClassOf* brick:Equipment .
+  ?device ?rel ?point .
+  ?rel rdfs:subPropertyOf* brick:hasPoint .
+  ?point a/rdfs:subClassOf* brick:Air_Temperature_Setpoint .
+
+  # The device is associated with a zone (e.g., the zone it controls)
+  OPTIONAL {
+    ?device brick:hasLocation ?zone .
+    ?zone a/rdfs:subClassOf* brick:HVAC_Zone .
+  }
+
+  OPTIONAL { ?device rdfs:label ?deviceLabel . }
+  OPTIONAL { ?point rdfs:label ?pointLabel . }
+  OPTIONAL { ?zone rdfs:label ?zoneLabel . }
+}
+ORDER BY ?deviceLabel ?pointLabel
+LIMIT 200",True,False,False,221,2,0,6,0.5,0.0,0.0,0.0,False,5086,2584,7670
+MORTAR_002,,,Which HVAC components provide setpoints for regulating zone air temperature and what are those setpoints called?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/1.2/Brick#>
+SELECT DISTINCT ?componentClass ?setpointClass WHERE {
+  # HVAC components that can generate a temperature setpoint for a zone
+  VALUES ?componentClass { brick:Thermostat brick:VAV_Box brick:AHU }
+  ?component a ?componentClass .
+  ?component brick:hasPoint ?sp .
+  ?sp a ?setpointClass .
+  # Setpoints that regulate zone‑air temperature
+  VALUES ?setpointClass { brick:Heating_Temperature_Setpoint brick:Cooling_Temperature_Setpoint brick:Zone_Air_Temperature_Setpoint }
+}
+ORDER BY ?componentClass ?setpointClass",True,False,False,221,2,0,2,1.0,0.0,0.0,0.0,False,1435,1400,2835
+MORTAR_002,,,What are the target temperatures for each zone and which devices supply these targets?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?setpoint ?setpointLabel ?device ?deviceLabel WHERE {
+  # all Zone Air Temperature Setpoint points
+  ?setpoint a brick:Zone_Air_Temperature_Setpoint .
+  OPTIONAL { ?setpoint rdfs:label ?setpointLabel }
+  # device (e.g., VAV terminal) that owns the setpoint
+  ?device brick:hasPoint ?setpoint .
+  OPTIONAL { ?device rdfs:label ?deviceLabel }
+}
+ORDER BY ?setpoint",True,True,False,221,2,221,4,0.6666666666666666,0.0,0.995475113122172,0.995475113122172,False,96483,6283,102766
+MORTAR_002,,,Which equipment controls the temperature settings for building zones?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?equipment ?equipmentLabel WHERE {
+  # Identify building zones
+  ?zone a brick:Zone .
+  
+  # Find equipment that controls a zone
+  ?equipment a brick:Equipment .
+  ?equipment brick:controls ?zone .
+  
+  # Ensure the equipment has a temperature setpoint point (i.e., it can set temperature)
+  ?equipment brick:hasPoint ?tempSetpoint .
+  ?tempSetpoint a brick:Temperature_Setpoint .
+  
+  # Optional human‑readable label
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel }
+}
+ORDER BY ?equipmentLabel",True,False,False,221,2,0,2,1.0,0.0,0.0,0.0,False,200,480,680
+MORTAR_003,,,Find all equipment and its points that are Supply Air Temperature Sensors,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+SELECT ?equipment ?point WHERE {
+  ?equipment a brick:Equipment .
+  ?equipment brick:hasPoint ?point .
+  ?point a brick:Supply_Air_Temperature_Sensor .
+}",True,False,False,102,2,0,2,1.0,0.0,0.0,0.0,False,202,273,475
+MORTAR_003,,,What equipment has sensors for Supply air temperature and what are they?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+# Equipment that is associated with a Supply Air Temperature Sensor
+SELECT DISTINCT ?equipment ?equipmentLabel ?sensor ?sensorLabel WHERE {
+  # Identify any sensor that is a Supply Air Temperature Sensor (including subclasses)
+  ?sensor a brick:Supply_Air_Temperature_Sensor .
+  OPTIONAL { ?sensor rdfs:label ?sensorLabel . }
+
+  # Follow any Brick relationship that links equipment to a point (sensor) in either direction.
+  # Common properties include brick:hasPoint, brick:hasLocation, brick:hasPart, etc.
+  ?equipment (brick:hasPoint|^brick:hasPoint|brick:hasLocation|^brick:hasLocation|brick:hasPart|^brick:hasPart|brick:hasSubEquipment|^brick:hasSubEquipment|brick:feeds|^brick:feeds) ?sensor .
+  ?equipment a brick:Equipment .
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel . }
+}
+ORDER BY ?equipmentLabel ?sensorLabel
+LIMIT 200",True,False,False,102,2,0,4,0.6666666666666666,0.0,0.0,0.0,False,7182,2932,10114
+MORTAR_003,,,What are the Supply Air Temperature Sensors and the equipment they belong to?,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX brick: <https://brickschema.org/schema/1.4/Brick#>
+PREFIX bf: <https://brickschema.org/schema/1.4/BrickFrame#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?sensor ?sensorLabel ?equipment ?equipmentLabel WHERE {
+  # Identify points that are instances (or subclasses) of Supply Air Temperature Sensor
+  ?sensor a ?type .
+  ?type rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor .
+  OPTIONAL { ?sensor rdfs:label ?sensorLabel }
+
+  # Find equipment that has this sensor as a point (using either BrickFrame or Brick namespace)
+  OPTIONAL {
+    { ?equipment bf:hasPoint ?sensor }
+    UNION
+    { ?equipment brick:hasPoint ?sensor }
+  }
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel }
+}
+ORDER BY ?sensor",True,False,False,102,2,0,4,0.6666666666666666,0.0,0.0,0.0,False,52614,6715,59329
+MORTAR_003,,,List the supply air temperature sensors and the equipment that has point to them,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+SELECT DISTINCT ?sensor ?equipment WHERE {
+  ?sensor a brick:Supply_Air_Temperature_Sensor .
+  ?equipment brick:hasPoint ?sensor .
+}",True,False,False,102,2,0,2,1.0,0.0,0.0,0.0,False,5492,1937,7429
+MORTAR_003,,,Which pieces of equipment include a sensor for measuring supply air temperature,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?equipment ?equipmentLabel WHERE {
+  # Find equipment that is associated with a sensor (or point) measuring supply air temperature
+  ?equipment a brick:Equipment .
+  ?equipment brick:hasPoint|brick:hasSensor ?sensor .
+  ?sensor a ?sensorClass .
+  ?sensorClass rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor .
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel }
+}
+ORDER BY ?equipmentLabel",True,False,False,102,2,0,2,1.0,0.0,0.0,0.0,False,3886,1522,5408
+MORTAR_003,,,Which devices measure supply air temperature,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX ex: <http://example.org/ontology/>
+
+SELECT DISTINCT ?device ?deviceLabel WHERE {
+  ?device a ex:Device .
+  ?device ex:measures ?measurement .
+  ?measurement a ex:SupplyAirTemperature .
+  OPTIONAL { ?device rdfs:label ?deviceLabel . }
+}
+ORDER BY ?deviceLabel",True,False,False,102,2,0,2,1.0,0.0,0.0,0.0,False,196,351,547
+MORTAR_003,,,What equipment monitors the supply air temperature,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT DISTINCT ?equipment ?equipmentLabel WHERE {
+  ?equipment a brick:Equipment .
+  ?equipment brick:hasPoint ?sensor .
+  ?sensor a/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor .
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel }
+}
+ORDER BY ?equipmentLabel",True,False,False,102,2,0,2,1.0,0.0,0.0,0.0,False,2024,1565,3589
+MORTAR_003,,,Where in the system is supply air temperature measured,lbl/cborg-coder,SELECT ?sp ?equip WHERE { ?sp rdf:type/rdfs:subClassOf* brick:Supply_Air_Temperature_Sensor . ?equip brick:hasPoint ?sp . },"PREFIX : <http://example.org/building#>
+SELECT ?location WHERE {
+  ?sensor a :SupplyAirTemperatureSensor .
+  ?sensor :locatedIn ?location .
+}",True,False,False,102,2,0,1,0.6666666666666666,0.0,0.0,0.0,True,199,278,477
+MORTAR_004,,,Find all equipment and its points that are Zone Air Temperature Sensors,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+SELECT ?equipment ?point WHERE {
+  ?equipment a brick:Equipment .
+  ?equipment brick:hasPoint ?point .
+  ?point a brick:Zone_Air_Temperature_Sensor .
+}",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,202,304,506
+MORTAR_004,,,What equipment has sensors for zone air temperature and what are they?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?equipment ?equipmentName ?sensor ?sensorName WHERE {
+  ?sensor a brick:Zone_Air_Temperature_Sensor .
+  ?equipment brick:hasPoint ?sensor .
+  OPTIONAL { ?equipment rdfs:label ?equipmentName . }
+  OPTIONAL { ?sensor rdfs:label ?sensorName . }
+}",True,False,False,387,2,0,4,0.6666666666666666,0.0,0.0,0.0,False,203,519,722
+MORTAR_004,,,What are the Zone Air Temperature Sensors and the equipment they belong to?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+SELECT ?sensor ?equipment WHERE {
+  ?sensor a brick:Zone_Air_Temperature_Sensor .
+  ?sensor brick:isPointOf ?equipment .
+}",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,204,372,576
+MORTAR_004,,,Which zone air temperature sensor instances are connected by has point to which equipment?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+SELECT ?sensor ?equipment WHERE {
+  ?equipment brick:hasPoint ?sensor .
+  ?sensor a brick:Zone_Air_Temperature_Sensor .
+}",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,205,332,537
+MORTAR_004,,,Which pieces of equipment include a sensor that measures the air temperature in a zone?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?equipment ?equipmentLabel WHERE {
+  # Equipment instance
+  ?equipment a brick:Equipment .
+  OPTIONAL { ?equipment rdfs:label ?equipmentLabel . }
+  # Equipment has a point (sensor)
+  ?equipment brick:hasPoint ?sensor .
+  # The point is a (subclass of) Air Temperature sensor
+  ?sensor a ?sensorClass .
+  ?sensorClass rdfs:subClassOf* brick:Air_Temperature_Sensor .
+  # Sensor is located in a zone (or space)
+  OPTIONAL { ?sensor brick:hasLocation ?zone . }
+  FILTER EXISTS { ?zone a brick:Zone }
+}",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,77444,9971,87415
+MORTAR_004,,,What devices are fitted with zone temperature sensors and what are those sensors?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX ex: <http://example.org/ontology#>
+
+SELECT ?deviceLabel ?sensorLabel WHERE {
+  ?device ex:hasSensor ?sensor .
+  ?sensor a ex:ZoneTemperatureSensor .
+  OPTIONAL { ?device rdfs:label ?deviceLabel . }
+  OPTIONAL { ?sensor rdfs:label ?sensorLabel . }
+}
+ORDER BY ?deviceLabel ?sensorLabel",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,204,381,585
+MORTAR_004,,,Where can I find the equipment that provides measurements of temperature in each zone?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX ex: <http://example.org/ontology/>
+SELECT ?zoneLabel ?equipmentLabel WHERE {
+  # Find all zones
+  ?zone a ex:Zone ;
+        rdfs:label ?zoneLabel .
+  # Find equipment that provides a temperature measurement
+  ?equipment a ex:Equipment ;
+            ex:providesMeasurement ?measurement ;
+            ex:locatedIn ?zone ;
+            rdfs:label ?equipmentLabel .
+  ?measurement a ex:TemperatureMeasurement .
+}
+ORDER BY ?zoneLabel",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,205,481,686
+MORTAR_004,,,Which devices monitor the temperature in the building zones?,lbl/cborg-coder,SELECT ?sensor ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?equip brick:hasPoint ?sensor . },"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+
+SELECT DISTINCT ?device ?zone
+WHERE {
+  # Devices that are temperature sensors
+  ?device a brick:Temperature_Sensor .
+  
+  # The zone in which the sensor is installed (or the zone it monitors)
+  ?device brick:hasLocation ?zone .
+  
+  # Ensure the location is a building zone
+  ?zone a brick:Zone .
+}
+ORDER BY ?device",True,False,False,387,2,0,2,1.0,0.0,0.0,0.0,False,200,436,636
+MORTAR_005,,,Which zone air temperature sensors and setpoints are linked to the same equipment?,lbl/cborg-coder,SELECT ?sensor ?sp ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp . ?equip brick:hasPoint ?sensor . },"PREFIX : <http://example.org/ontology#>
+SELECT ?sensor ?setpoint ?equipment WHERE {
+  ?sensor a :ZoneAirTemperatureSensor .
+  ?setpoint a :ZoneAirTemperatureSetpoint .
+  ?sensor :linkedToEquipment ?equipment .
+  ?setpoint :linkedToEquipment ?equipment .
+}",True,False,False,204,3,0,3,1.0,0.0,0.0,0.0,False,205,296,501
+MORTAR_005,,,Find all connected pairs of Zone Air Temperature Sensors and Setpoints,lbl/cborg-coder,SELECT ?sensor ?sp ?equip WHERE { ?sensor rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Sensor . ?sp rdf:type/rdfs:subClassOf* brick:Zone_Air_Temperature_Setpoint . ?equip brick:hasPoint ?sp . ?equip brick:hasPoint ?sensor . },"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX bot: <https://w3id.org/bot#>
+PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+PREFIX bf: <https://brickschema.org/schema/1.1/BrickFrame#>
+
+SELECT DISTINCT ?sensor ?setpoint WHERE {
+  # Find all Zone Air Temperature Sensors
+  ?sensor a brick:Zone_Air_Temperature_Sensor .
+
+  # Find Setpoints that are related to the same zone (or directly linked via a control relationship)
+  ?setpoint a brick:Zone_Air_Temperature_Setpoint .
+
+  # Connectedness: either they share a common zone, or a sensor is linked to a setpoint through a bf:hasPoint / bf:isPointOf relationship
+  {
+    # Shared zone relationship
+    ?zone a brick:HVAC_Zone .
+    ?sensor bf:isPointOf ?zone .
+    ?setpoint bf:isPointOf ?zone .
+  } UNION {
+    # Direct control relationship (sensor provides feedback to the setpoint)
+    ?sensor bf:feeds ?setpoint .
+  } UNION {
+    # Reverse direction of a control relationship
+    ?setpoint bf:feeds ?sensor .
+  }
+}
+ORDER BY ?sensor ?setpoint",True,False,False,204,3,0,2,0.8,0.0,0.0,0.0,True,202,398,600

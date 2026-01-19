@@ -1,0 +1,35 @@
+query_id,question_number,source,question,model,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens
+MORTAR_001,,,What are the brick points in this graph?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+SELECT ?point ?label WHERE {
+  ?point a brick:Point .
+  OPTIONAL { ?point rdfs:label ?label . }
+}",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,180,380,560
+MORTAR_001,,,Can you find nodes that has information about an external reference?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT DISTINCT ?node ?externalRef WHERE {
+  ?node rdfs:seeAlso ?externalRef .
+}",True,True,False,1346,2,52,2,1.0,0.0,0.0,0.0,False,183,312,495
+MORTAR_001,,,What points does this graph have?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?point ?x ?y WHERE {
+  ?point a <http://example.org/ontology/Point> ;
+         <http://example.org/ontology/xCoordinate> ?x ;
+         <http://example.org/ontology/yCoordinate> ?y .
+}",True,False,False,1346,2,0,3,0.8,0.0,0.0,0.0,False,434,500,934
+MORTAR_001,,,What data sources I have in my system?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } },True,False,False,1346,2,0,1,0.6666666666666666,0.0,0.0,0.0,True,925,480,1405
+MORTAR_001,,,Which entities that are instances of Point (including its subclasses) have which types?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT DISTINCT ?entity ?type WHERE {
+  ?entity rdf:type ?type .
+  ?type rdfs:subClassOf* :Point .
+}",False,False,False,1346,2,0,0,0.0,0.0,0.0,0.0,False,187,289,476
+MORTAR_001,,,What point entities exist and what types are they assigned?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX brick: <https://brickschema.org/schema/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT DISTINCT ?type (COUNT(?entity) AS ?count) WHERE {
+  ?entity a ?type .
+  ?type rdfs:subClassOf* brick:Point .
+}
+GROUP BY ?type
+ORDER BY DESC(?count)",True,True,False,1346,2,22,2,1.0,0.0,0.4888888888888889,0.0,False,98647,3120,101767
+MORTAR_001,,,List all measurement points along with their categories.,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX : <http://example.org/ontology#>
+SELECT ?measurementPoint ?category WHERE {
+  ?measurementPoint a :MeasurementPoint .
+  ?measurementPoint :hasCategory ?category .
+}",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,180,286,466

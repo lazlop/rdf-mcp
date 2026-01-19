@@ -1,0 +1,23 @@
+query_id,question_number,source,question,model,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens
+MORTAR_001,,,What are the brick points in this graph?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX brick: <https://brickschema.org/schema/1.0.2/Brick#>
+SELECT ?point WHERE {
+  ?point a brick:Point .
+}",True,False,False,1346,2,0,1,0.6666666666666666,0.0,0.0,0.0,True,180,440,620
+MORTAR_001,,,Can you find nodes that has information about an external reference?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT DISTINCT ?node ?externalReference WHERE {
+  ?node rdfs:seeAlso ?externalReference .
+  FILTER(isIRI(?externalReference) && STRSTARTS(STR(?externalReference), ""http""))
+}",True,True,False,1346,2,45,2,1.0,0.0,0.0,0.0,False,183,426,609
+MORTAR_001,,,What points does this graph have?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX : <http://example.org/ontology/>
+SELECT ?point WHERE {
+  ?graph a :Graph .
+  ?graph :hasPoint ?point .
+}",True,False,False,1346,2,0,1,0.6666666666666666,0.0,0.0,0.0,True,912,627,1539
+MORTAR_001,,,What data sources I have in my system?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ""No data sources found in the system."" AS ?message",False,False,False,1346,2,0,0,0.0,0.0,0.0,0.0,False,1947,1301,3248
+MORTAR_001,,,Which entities that are instances of Point (including its subclasses) have which types?,lbl/cborg-coder,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rec: <https://w3id.org/rec#>
+
+SELECT ?entity ?type WHERE {
+  ?entity a ?type .
+  ?type rdfs:subClassOf* rec:Point .
+}",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,13749,2837,16586
