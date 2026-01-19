@@ -78,7 +78,10 @@ class SimpleSparqlAgentMCP:
         self.total_tokens = 0
 
         # Load API credentials
-        if api_key_file:
+        if api_key:
+            self.api_key = api_key
+            self.base_url = base_url
+        elif api_key_file:
             with open(api_key_file, 'r') as file:
                 config = yaml.safe_load(file)
                 self.api_key = config.get('key', api_key)
@@ -178,8 +181,9 @@ class SimpleSparqlAgentMCP:
                     
                     # Optional: Print message history for debugging
                     if messages:
-                        print("\n📝 Message History:")
-                        pprint(messages)
+                        # Saving message history 
+                        with open(f"message_history.json", 'w') as f:
+                            json.dump(messages, f, indent=2)
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
             traceback.print_exc()
