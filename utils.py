@@ -102,7 +102,7 @@ def check_if_question_exists(question_text: str, log_filename: str, model_name: 
 # --- CSV Logger Class ---
 
 LOG_FIELDNAMES = [
-    'query_id', 'question_number', 'source', 'question', 'model',
+    'query_id', 'question_number', 'source', 'question', 'model', 'message_history',
     'ground_truth_sparql', 'generated_sparql',
     'syntax_ok', 'returns_results', 'perfect_match',
     'gt_num_rows', 'gt_num_cols',
