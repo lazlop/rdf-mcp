@@ -16,3 +16,6 @@ get_hierarchy - Traverse spatial or equipment hierarchies (e.g., "show me everyt
 get_relationships - Query specific relationship types (feeds, hasPoint, hasLocation, etc.) either globally or filtered by entity. Critical for understanding system topology.
 
 get_similar_entities - fuzzy search for entities/classes
+
+
+Test the effects of various tools on token costs and levels of success. 

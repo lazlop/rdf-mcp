@@ -17,3 +17,18 @@ SELECT ?fan ?fanLabel WHERE {
   ?fan a brick:Fan .
   OPTIONAL { ?fan rdfs:label ?fanLabel . }
 }",True,False,True,0,1,0,2,0.6666666666666666,1.0,1.0,1.0,False,3646,451,4097
+test_001,,,What fans are part of AHU1?,lbl/cborg-coder,"
+            PREFIX brick: <https://brickschema.org/schema/Brick#>
+            PREFIX ex: <http://example.org/>
+            SELECT ?fan WHERE {
+                ex:AHU1 brick:hasPart ?fan .
+                ?fan a brick:Fan .
+            }
+        ","PREFIX brick: <https://brickschema.org/schema/Brick#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+SELECT DISTINCT ?fan ?fanLabel WHERE {
+  <http://buildsys.org/ontologies/bldg11#AHU01> ?rel ?fan .
+  ?fan rdf:type/rdfs:subClassOf* brick:Fan .
+  OPTIONAL { ?fan rdfs:label ?fanLabel . }
+}
+ORDER BY ?fan",True,False,True,0,1,0,2,0.6666666666666666,1.0,1.0,1.0,False,2528,675,3203

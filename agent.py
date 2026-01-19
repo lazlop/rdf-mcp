@@ -224,7 +224,7 @@ class SimpleSparqlAgentMCP:
 
 
 def run_agent(
-    sparql_endpoint: str,
+    
     eval_data: Dict[str, Any],
     logger: CsvLogger,
     prefixes: str,

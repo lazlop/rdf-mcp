@@ -27,6 +27,281 @@ def _ensure_graph_loaded():
         print(f"✅ Loaded graph from {graph_file} ({len(graph)} triples)")
     return graph
 
+def _format_term(term) -> Dict[str, Any]:
+    """Format an RDF term for JSON serialization"""
+    if isinstance(term, URIRef):
+        return {'type': 'uri', 'value': str(term)}
+    elif isinstance(term, Literal):
+        result = {'type': 'literal', 'value': str(term)}
+        if term.datatype:
+            result['datatype'] = str(term.datatype)
+        if term.language:
+            result['language'] = term.language
+        return result
+    elif isinstance(term, BNode):
+        return {'type': 'bnode', 'value': str(term)}
+    else:
+        return {'type': 'unknown', 'value': str(term)}
+
+@mcp.tool()
+def subjects(
+    predicate: Optional[str] = None,
+    object: Optional[str] = None,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Get subjects matching the given predicate and object pattern.
+    
+    Args:
+        predicate: Optional predicate URI to filter by
+        object: Optional object value to filter by (URI or literal)
+        limit: Maximum number of results to return (default: 100)
+    
+    Returns:
+        List of matching subjects with their types
+    """
+    g = _ensure_graph_loaded()
+    
+    # Convert string inputs to RDF terms
+    pred = URIRef(predicate) if predicate else None
+    obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
+    
+    subjects_list = []
+    count = 0
+    
+    for subj in g.subjects(pred, obj):
+        if count >= limit:
+            break
+        subjects_list.append(_format_term(subj))
+        count += 1
+    
+    pattern = f"predicate={predicate or 'ANY'}, object={object or 'ANY'}"
+    summary = f"Found {len(subjects_list)} subjects matching pattern: {pattern}"
+    
+    return {
+        "summary": summary,
+        "pattern": {"predicate": predicate, "object": object},
+        "subjects": subjects_list,
+        "count": len(subjects_list),
+        "limited": count >= limit
+    }
+
+@mcp.tool()
+def predicates(
+    subject: Optional[str] = None,
+    object: Optional[str] = None,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Get predicates matching the given subject and object pattern.
+    
+    Args:
+        subject: Optional subject URI to filter by
+        object: Optional object value to filter by (URI or literal)
+        limit: Maximum number of results to return (default: 100)
+    
+    Returns:
+        List of matching predicates
+    """
+    g = _ensure_graph_loaded()
+    
+    # Convert string inputs to RDF terms
+    subj = URIRef(subject) if subject else None
+    obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
+    
+    predicates_list = []
+    count = 0
+    
+    for pred in g.predicates(subj, obj):
+        if count >= limit:
+            break
+        predicates_list.append(_format_term(pred))
+        count += 1
+    
+    pattern = f"subject={subject or 'ANY'}, object={object or 'ANY'}"
+    summary = f"Found {len(predicates_list)} predicates matching pattern: {pattern}"
+    
+    return {
+        "summary": summary,
+        "pattern": {"subject": subject, "object": object},
+        "predicates": predicates_list,
+        "count": len(predicates_list),
+        "limited": count >= limit
+    }
+
+@mcp.tool()
+def objects(
+    subject: Optional[str] = None,
+    predicate: Optional[str] = None,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Get objects matching the given subject and predicate pattern.
+    
+    Args:
+        subject: Optional subject URI to filter by
+        predicate: Optional predicate URI to filter by
+        limit: Maximum number of results to return (default: 100)
+    
+    Returns:
+        List of matching objects with their types
+    """
+    g = _ensure_graph_loaded()
+    
+    # Convert string inputs to RDF terms
+    subj = URIRef(subject) if subject else None
+    pred = URIRef(predicate) if predicate else None
+    
+    objects_list = []
+    count = 0
+    
+    for obj in g.objects(subj, pred):
+        if count >= limit:
+            break
+        objects_list.append(_format_term(obj))
+        count += 1
+    
+    pattern = f"subject={subject or 'ANY'}, predicate={predicate or 'ANY'}"
+    summary = f"Found {len(objects_list)} objects matching pattern: {pattern}"
+    
+    return {
+        "summary": summary,
+        "pattern": {"subject": subject, "predicate": predicate},
+        "objects": objects_list,
+        "count": len(objects_list),
+        "limited": count >= limit
+    }
+
+@mcp.tool()
+def subject_predicates(
+    object: Optional[str] = None,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Get subject-predicate pairs for triples matching the given object.
+    
+    Args:
+        object: Optional object value to filter by (URI or literal)
+        limit: Maximum number of results to return (default: 100)
+    
+    Returns:
+        List of (subject, predicate) pairs
+    """
+    g = _ensure_graph_loaded()
+    
+    # Convert string input to RDF term
+    obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
+    
+    pairs_list = []
+    count = 0
+    
+    for subj, pred in g.subject_predicates(obj):
+        if count >= limit:
+            break
+        pairs_list.append({
+            "subject": _format_term(subj),
+            "predicate": _format_term(pred)
+        })
+        count += 1
+    
+    pattern = f"object={object or 'ANY'}"
+    summary = f"Found {len(pairs_list)} subject-predicate pairs matching pattern: {pattern}"
+    
+    return {
+        "summary": summary,
+        "pattern": {"object": object},
+        "pairs": pairs_list,
+        "count": len(pairs_list),
+        "limited": count >= limit
+    }
+
+@mcp.tool()
+def predicate_objects(
+    subject: Optional[str] = None,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Get predicate-object pairs for triples matching the given subject.
+    
+    Args:
+        subject: Optional subject URI to filter by
+        limit: Maximum number of results to return (default: 100)
+    
+    Returns:
+        List of (predicate, object) pairs
+    """
+    g = _ensure_graph_loaded()
+    
+    # Convert string input to RDF term
+    subj = URIRef(subject) if subject else None
+    
+    pairs_list = []
+    count = 0
+    
+    for pred, obj in g.predicate_objects(subj):
+        if count >= limit:
+            break
+        pairs_list.append({
+            "predicate": _format_term(pred),
+            "object": _format_term(obj)
+        })
+        count += 1
+    
+    pattern = f"subject={subject or 'ANY'}"
+    summary = f"Found {len(pairs_list)} predicate-object pairs matching pattern: {pattern}"
+    
+    return {
+        "summary": summary,
+        "pattern": {"subject": subject},
+        "pairs": pairs_list,
+        "count": len(pairs_list),
+        "limited": count >= limit
+    }
+
+@mcp.tool()
+def subject_objects(
+    predicate: Optional[str] = None,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Get subject-object pairs for triples matching the given predicate.
+    
+    Args:
+        predicate: Optional predicate URI to filter by
+        limit: Maximum number of results to return (default: 100)
+    
+    Returns:
+        List of (subject, object) pairs
+    """
+    g = _ensure_graph_loaded()
+    
+    # Convert string input to RDF term
+    pred = URIRef(predicate) if predicate else None
+    
+    pairs_list = []
+    count = 0
+    
+    for subj, obj in g.subject_objects(pred):
+        if count >= limit:
+            break
+        pairs_list.append({
+            "subject": _format_term(subj),
+            "object": _format_term(obj)
+        })
+        count += 1
+    
+    pattern = f"predicate={predicate or 'ANY'}"
+    summary = f"Found {len(pairs_list)} subject-object pairs matching pattern: {pattern}"
+    
+    return {
+        "summary": summary,
+        "pattern": {"predicate": predicate},
+        "pairs": pairs_list,
+        "count": len(pairs_list),
+        "limited": count >= limit
+    }
+
+
 @mcp.tool()
 def describe_entity(
     entity: str | URIRef,
@@ -110,7 +385,7 @@ def get_building_summary() -> Dict[str, Any]:
     
     class_counts = {}
     for row in g.query(class_query):
-        class_name = str(row['class']).replace(str(BRICK), "brick:")
+        class_name = str(row['class'])# .replace(str(BRICK), "brick:")
         class_counts[class_name] = int(row['count'])
     
     # Count relationships by predicate type using SPARQL
@@ -166,10 +441,10 @@ def find_entities_by_type(brick_class: str, include_subclasses: bool = True) -> 
     g = _ensure_graph_loaded()
     
     # todo: handle namespaces better
-    if brick_class.startswith("brick:"):
-        brick_class = brick_class.replace("brick:", "")
-    elif brick_class.startswith(str(BRICK)):
-        brick_class = brick_class.replace(str(BRICK), "")
+    # if brick_class.startswith("brick:"):
+    #     brick_class = brick_class.replace("brick:", "")
+    # elif brick_class.startswith(str(BRICK)):
+    #     brick_class = brick_class.replace(str(BRICK), "")
     
     # Create the class URI
     class_uri = BRICK[brick_class]
