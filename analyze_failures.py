@@ -53,13 +53,50 @@ class FailureClassification(BaseModel):
     )
     
 # ============================================================================
+# Utility Functions
+# ============================================================================
+
+def truncate_message_history(
+    message_history: str,
+    max_chars: int = 8000,
+    keep_first_chars: int = 2000,
+    keep_last_chars: int = 6000,
+) -> str:
+    """
+    Truncate message history to prevent token overflow while preserving context.
+    
+    Args:
+        message_history: The full message history string
+        max_chars: Maximum characters to keep (approximate 2:1 char:token ratio)
+        keep_first_chars: Number of characters to keep from the beginning
+        keep_last_chars: Number of characters to keep from the end
+    
+    Returns:
+        Truncated message history with ellipsis indicator if truncated
+    """
+    if len(message_history) <= max_chars:
+        return message_history
+    
+    # Keep first part (initial context) and last part (most recent errors)
+    first_part = message_history[:keep_first_chars]
+    last_part = message_history[-keep_last_chars:]
+    
+    omitted_chars = len(message_history) - keep_first_chars - keep_last_chars
+    truncation_notice = (
+        f"\n\n... [TRUNCATED: {omitted_chars} characters omitted to stay within token limits] ...\n\n"
+    )
+    
+    return first_part + truncation_notice + last_part
+
+
+# ============================================================================
 # Failure Analysis Agent
 # ============================================================================
 
 class FailureAnalyzer:
     """Analyzes SPARQL query generation failures using an LLM agent."""
     
-    SYSTEM_PROMPT = """You are an expert in SPARQL query generation and knowledge graph analysis, 
+    SYSTEM_PROMPT = """You are an expert in SPARQL query generation and knowledge graph analysis,
 specifically for Brick Schema and building metadata. Your task is to analyze failed SPARQL query 
 generation attempts and classify the type of failure.
 
@@ -91,25 +128,25 @@ Analyze the provided information carefully and classify the failure with evidenc
         self,
         model_name: Optional[str] = "lbl/cborg-coder",
         api_key_file: Optional[str] = "analysis-config.json",
+        max_message_history_chars: int = 8000,
     ):
         """
         Initialize the Failure Analyzer.
         
         Args:
             model_name: Name of the model to use for analysis
-            api_key: API key for the model provider
-            base_url: Base URL for the model provider
-            api_key_file: Path to YAML file containing 'key' and 'base_url'
+            api_key_file: Path to JSON file containing 'api-key', 'base-url', and optionally 'model'
+            max_message_history_chars: Maximum characters to include from message history
         """
+        self.max_message_history_chars = max_message_history_chars
         # Load API credentials
         with open(api_key_file, 'r') as file:
-            print(f"Loading API credentials from {api_key_file}")
             config = json.load(file)
-            self.api_key = config.get('api-key')
-            self.base_url = config.get('base-url')
-            self.model_name = config.get('model', model_name)
-self._model_name = self.model_name
-self._api_key_file = api_key_file
+        self.api_key = config.get('api-key')
+        self.base_url = config.get('base-url')
+        self.model_name = config.get('model', model_name)
+        self._model_name = self.model_name
+        self._api_key_file = api_key_file
 
         
         # Set up the model
@@ -145,6 +182,12 @@ self._api_key_file = api_key_file
         Returns:
             FailureClassification with the analysis results
         """
+        # Truncate message history to prevent token overflow
+        truncated_messages = truncate_message_history(
+            error_messages,
+            max_chars=self.max_message_history_chars
+        )
+        
         user_message = f"""Analyze this SPARQL query generation failure:
 
 **Question:** {question}
@@ -160,7 +203,7 @@ self._api_key_file = api_key_file
 ```
 
 **Message History (Agent Conversation):**
-{error_messages}
+{truncated_messages}
 
 Based on the above information, classify the primary failure type and provide evidence.
 
@@ -192,8 +235,12 @@ You MUST respond with a valid JSON object containing all required fields:
         for idx, row in failures_df.iterrows():
             try:
                 print(f"Analyzing {idx + 1}/{len(failures_df)}: query_id {row.get('query_id', 'unknown')}")
-                temp_analyzer = FailureAnalyzer(model_name=self._model_name, api_key_file=self._api_key_file)
-classification = await temp_analyzer.analyze_failure(
+                temp_analyzer = FailureAnalyzer(
+                    model_name=self._model_name,
+                    api_key_file=self._api_key_file,
+                    max_message_history_chars=self.max_message_history_chars
+                )
+                classification = await temp_analyzer.analyze_failure(
                     question=row['question'],
                     generated_sparql=row['generated_sparql'],
                     ground_truth_sparql=row['ground_truth_sparql'],
@@ -259,6 +306,7 @@ async def analyze_failures_async(
     model_name: str = "lbl/cborg-coder",
     api_key_file: Optional[str] = "analysis-config.json",
     row_matching_threshold: float = 1.0,
+    max_message_history_chars: int = 8000,
 ) -> pd.DataFrame:
     """
     Analyze failures from a CSV file asynchronously.
@@ -267,11 +315,9 @@ async def analyze_failures_async(
         csv_path: Path to input CSV file
         output_path: Path to output CSV file (defaults to input_path with '_analyzed' suffix)
         model_name: LLM model to use for analysis
-        api_key: API key for the model provider
-        base_url: Base URL for the model provider
-        api_key_file: Path to YAML file with API credentials
-        max_concurrent: Maximum concurrent API calls
+        api_key_file: Path to JSON file with API credentials
         row_matching_threshold: Threshold for considering a query as failed
+        max_message_history_chars: Maximum characters to include from message history (default: 8000)
     
     Returns:
         DataFrame with failure classifications
@@ -285,9 +331,11 @@ async def analyze_failures_async(
     
     # Initialize analyzer
     print(f"\n🤖 Initializing failure analyzer with model: {model_name}")
+    print(f"   Max message history chars: {max_message_history_chars}")
     analyzer = FailureAnalyzer(
         model_name=model_name,
         api_key_file=api_key_file,
+        max_message_history_chars=max_message_history_chars,
     )
     
     # Analyze failures
@@ -324,6 +372,7 @@ def analyze_failures(
     model_name: str = "lbl/cborg-coder",
     api_key_file: Optional[str] = "analysis-config.json",
     row_matching_threshold: float = 1.0,
+    max_message_history_chars: int = 8000,
 ) -> pd.DataFrame:
     """
     Synchronous wrapper for analyze_failures_async.
@@ -337,6 +386,7 @@ def analyze_failures(
             model_name=model_name,
             api_key_file=api_key_file,
             row_matching_threshold=row_matching_threshold,
+            max_message_history_chars=max_message_history_chars,
         )
     )
 
@@ -376,6 +426,12 @@ if __name__ == "__main__":
         default=1.0,
         help="row_matching_f1 threshold for failures (default: 1.0)"
     )
+    parser.add_argument(
+        "--max-message-chars",
+        type=int,
+        default=8000,
+        help="Maximum characters to include from message history (default: 8000, ~4000 tokens)"
+    )
     
     args = parser.parse_args()
     
@@ -385,4 +441,5 @@ if __name__ == "__main__":
         model_name=args.model,
         api_key_file=args.api_key_file,
         row_matching_threshold=args.threshold,
+        max_message_history_chars=args.max_message_chars,
     )
