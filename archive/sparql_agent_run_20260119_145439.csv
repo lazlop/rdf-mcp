@@ -1,0 +1,35 @@
+query_id,question_number,source,question,model,message_history,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens
+MORTAR_001,,,What are the brick points in this graph?,lbl/cborg-coder,,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+SELECT DISTINCT ?point WHERE {
+  ?point a ?type .
+  FILTER regex(str(?type), ""Point$"", ""i"")
+}",True,True,False,1346,2,329,1,0.6666666666666666,0.0,0.0,0.0,True,32740,3347,36087
+MORTAR_001,,,Can you find nodes that has information about an external reference?,lbl/cborg-coder,,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX ex: <http://example.org/>
+SELECT DISTINCT ?node ?p ?external WHERE {
+  ?node ?p ?external .
+  FILTER(isIRI(?external))
+  FILTER(!regex(str(?external), ""^http://example.org/""))
+}
+LIMIT 100",True,True,False,1346,2,99,3,0.8,0.0,0.05454545454545454,0.0,False,202,427,629
+MORTAR_001,,,What points does this graph have?,lbl/cborg-coder,,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?point ?x ?y WHERE {
+  ?point a <http://example.org/ontology/Point> ;
+          <http://example.org/ontology/hasXCoordinate> ?x ;
+          <http://example.org/ontology/hasYCoordinate> ?y .
+}",True,False,False,1346,2,0,3,0.8,0.0,0.0,0.0,False,467,911,1378
+MORTAR_001,,,What data sources I have in my system?,lbl/cborg-coder,,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT DISTINCT ?source ?label WHERE {
+  ?source a <http://example.org/ontology/DataSource> .
+  OPTIONAL { ?source rdfs:label ?label . }
+}",True,False,False,1346,2,0,2,1.0,0.0,0.0,0.0,False,199,309,508
+MORTAR_001,,,Which entities that are instances of Point (including its subclasses) have which types?,lbl/cborg-coder,,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX brick: <https://brickschema.org/schema/Brick#>
+SELECT ?entity ?type
+WHERE {
+  ?entity a ?type .
+  ?type rdfs:subClassOf* brick:Point .
+}
+ORDER BY ?entity",True,True,False,1346,2,1286,2,1.0,0.9772036474164133,0.9998010741993236,0.9772036474164133,False,173765,4460,178225
+MORTAR_001,,,What point entities exist and what types are they assigned?,lbl/cborg-coder,,SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?point ?type WHERE {
+  ?point a ?type .
+  FILTER(CONTAINS(LCASE(STR(?type)), ""point""))
+}
+ORDER BY ?point",True,True,False,1346,2,329,2,1.0,0.3868656716417911,0.31181375018367774,0.3868656716417911,False,201,326,527

@@ -281,6 +281,7 @@ class SimpleSparqlAgentMCP:
             **eval_data,
             'model': self.model_name,
             'generated_sparql': generated_query,
+            'message_history': "\n".join(self.messages),
             'syntax_ok': gen_results_obj['syntax_ok'],
             'returns_results': gen_results_obj['row_count'] > 0,
             'perfect_match': row_matching_f1 == 1.0,
