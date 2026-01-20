@@ -40,3 +40,4 @@ venv.bak/
 
 # additional ignores
 *config.json
+development
