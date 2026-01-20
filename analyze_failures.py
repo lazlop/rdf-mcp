@@ -5,6 +5,8 @@ Analyzes SPARQL query generation failures using a pydantic_ai agent to classify
 failure types based on message history and query comparison.
 """
 import asyncio
+from datetime import datetime
+import json
 import os
 import sys
 from pathlib import Path
@@ -105,8 +107,6 @@ Analyze the provided information carefully and classify the failure with evidenc
     def __init__(
         self,
         model_name: Optional[str] = "lbl/cborg-coder",
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
         api_key_file: Optional[str] = "analysis-config.json",
     ):
         """
@@ -119,18 +119,13 @@ Analyze the provided information carefully and classify the failure with evidenc
             api_key_file: Path to YAML file containing 'key' and 'base_url'
         """
         # Load API credentials
-        if api_key:
-            self.api_key = api_key
-            self.base_url = base_url
-        elif api_key_file:
-            with open(api_key_file, 'r') as file:
-                config = yaml.safe_load(file)
-                self.api_key = config.get('api-key', api_key)
-                self.base_url = config.get('base-url', base_url)
-                self.model_name = config.get('model', model_name)
-        else:
-            self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-            self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
+        with open(api_key_file, 'r') as file:
+            print(f"Loading API credentials from {api_key_file}")
+            config = json.load(file)
+            self.api_key = config.get('api-key')
+            self.base_url = config.get('base-url')
+            self.model_name = config.get('model', model_name)
+
         
         # Set up the model
         self.model = OpenAIModel(
@@ -138,11 +133,12 @@ Analyze the provided information carefully and classify the failure with evidenc
             provider=OpenAIProvider(base_url=self.base_url, api_key=self.api_key),
         )
         
-        # Create the agent
+        # Create the agent with retries
         self.agent = Agent(
             self.model,
             result_type=FailureClassification,
             system_prompt=self.SYSTEM_PROMPT,
+            retries=3,
         )
     
     async def analyze_failure(
@@ -181,7 +177,14 @@ Analyze the provided information carefully and classify the failure with evidenc
 **Message History (Agent Conversation):**
 {message_history}
 
-Based on the above information, classify the primary failure type and provide evidence."""
+Based on the above information, classify the primary failure type and provide evidence.
+
+You MUST respond with a valid JSON object containing all required fields:
+- primary_category (one of: 'Vocabulary Hallucination', 'Topological Mismatch', 'Identifier Guessing', 'Misunderstanding User Intent')
+- confidence (float between 0.0 and 1.0)
+- evidence (string with specific examples)
+- secondary_category (optional, same options as primary_category or null)
+- explanation (detailed string explanation)"""
 
         result = await self.agent.run(user_message)
         return result.data
@@ -189,49 +192,50 @@ Based on the above information, classify the primary failure type and provide ev
     async def analyze_batch(
         self,
         failures_df: pd.DataFrame,
-        max_concurrent: int = 5,
+        max_concurrent: int = 1,
     ) -> pd.DataFrame:
         """
-        Analyze a batch of failures with concurrency control.
+        Analyze a batch of failures sequentially (one at a time).
         
         Args:
             failures_df: DataFrame with failed queries
-            max_concurrent: Maximum number of concurrent API calls
+            max_concurrent: Ignored, kept for API compatibility
         
         Returns:
             DataFrame with added classification columns
         """
-        semaphore = asyncio.Semaphore(max_concurrent)
+        results = []
         
-        async def analyze_with_semaphore(row):
-            async with semaphore:
-                try:
-                    classification = await self.analyze_failure(
-                        question=row['question'],
-                        generated_sparql=row['generated_sparql'],
-                        ground_truth_sparql=row['ground_truth_sparql'],
-                        message_history=row['message_history'],
-                    )
-                    return {
-                        'failure_category': classification.primary_category,
-                        'failure_confidence': classification.confidence,
-                        'failure_evidence': classification.evidence,
-                        'secondary_category': classification.secondary_category,
-                        'failure_explanation': classification.explanation,
-                    }
-                except Exception as e:
-                    print(f"Error analyzing query_id {row.get('query_id', 'unknown')}: {e}")
-                    return {
-                        'failure_category': 'ERROR',
-                        'failure_confidence': 0.0,
-                        'failure_evidence': str(e),
-                        'secondary_category': None,
-                        'failure_explanation': f"Analysis failed: {str(e)}",
-                    }
-        
-        # Process all rows concurrently
-        tasks = [analyze_with_semaphore(row) for _, row in failures_df.iterrows()]
-        results = await asyncio.gather(*tasks)
+        # Process rows one at a time
+        for idx, row in failures_df.iterrows():
+            try:
+                print(f"Analyzing {idx + 1}/{len(failures_df)}: query_id {row.get('query_id', 'unknown')}")
+                classification = await self.analyze_failure(
+                    question=row['question'],
+                    generated_sparql=row['generated_sparql'],
+                    ground_truth_sparql=row['ground_truth_sparql'],
+                    message_history=row['message_history'],
+                )
+                result = {
+                    'failure_category': classification.primary_category,
+                    'failure_confidence': classification.confidence,
+                    'failure_evidence': classification.evidence,
+                    'secondary_category': classification.secondary_category,
+                    'failure_explanation': classification.explanation,
+                }
+                print(f"  ✓ Classified as: {classification.primary_category} (confidence: {classification.confidence:.2f})")
+            except Exception as e:
+                print(f"  ✗ Error analyzing query_id {row.get('query_id', 'unknown')}: {e}")
+                import traceback
+                traceback.print_exc()
+                result = {
+                    'failure_category': 'ERROR',
+                    'failure_confidence': 0.0,
+                    'failure_evidence': str(e),
+                    'secondary_category': None,
+                    'failure_explanation': f"Analysis failed: {str(e)}",
+                }
+            results.append(result)
         
         # Add results to dataframe
         for col in ['failure_category', 'failure_confidence', 'failure_evidence', 
@@ -273,10 +277,8 @@ def load_and_filter_failures(
 async def analyze_failures_async(
     csv_path: str,
     output_path: Optional[str] = None,
-    model_name: str = "gpt-4o-mini",
-    api_key: Optional[str] = None,
-    base_url: Optional[str] = None,
-    api_key_file: Optional[str] = None,
+    model_name: str = "lbl/cborg-coder",
+    api_key_file: Optional[str] = "analysis-config.json",
     max_concurrent: int = 5,
     row_matching_threshold: float = 1.0,
 ) -> pd.DataFrame:
@@ -307,8 +309,6 @@ async def analyze_failures_async(
     print(f"\n🤖 Initializing failure analyzer with model: {model_name}")
     analyzer = FailureAnalyzer(
         model_name=model_name,
-        api_key=api_key,
-        base_url=base_url,
         api_key_file=api_key_file,
     )
     
@@ -335,15 +335,18 @@ async def analyze_failures_async(
     
     return analyzed_df
 
+def create_timestamped_logger(base_name: str = "failure_analysis"):
+    """Create a logger with timestamp in filename."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = f"{base_name}_{timestamp}.csv"
+    return log_filename
 
 def analyze_failures(
     csv_path: str,
     output_path: Optional[str] = None,
-    model_name: str = "gpt-4o-mini",
-    api_key: Optional[str] = None,
-    base_url: Optional[str] = None,
-    api_key_file: Optional[str] = None,
-    max_concurrent: int = 5,
+    model_name: str = "lbl/cborg-coder",
+    api_key_file: Optional[str] = "analysis-config.json",
+    max_concurrent: int = 1,
     row_matching_threshold: float = 1.0,
 ) -> pd.DataFrame:
     """
@@ -356,8 +359,6 @@ def analyze_failures(
             csv_path=csv_path,
             output_path=output_path,
             model_name=model_name,
-            api_key=api_key,
-            base_url=base_url,
             api_key_file=api_key_file,
             max_concurrent=max_concurrent,
             row_matching_threshold=row_matching_threshold,
@@ -381,29 +382,22 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-o", "--output",
-        help="Output path for analyzed CSV (default: input_analyzed.csv)"
+        help="Output path for analyzed CSV (default: input_analyzed.csv)",
+        default = create_timestamped_logger()
     )
     parser.add_argument(
         "-m", "--model",
-        default="gpt-4o-mini",
-        help="LLM model to use (default: gpt-4o-mini)"
-    )
-    parser.add_argument(
-        "-k", "--api-key",
-        help="API key for the model provider"
-    )
-    parser.add_argument(
-        "-b", "--base-url",
-        help="Base URL for the model provider"
+        help="LLM model to use (default: gpt-oss)"
     )
     parser.add_argument(
         "-f", "--api-key-file",
-        help="Path to YAML file with API credentials"
+        help="Path to YAML file with API credentials",
+        default="analysis-config.json"
     )
     parser.add_argument(
         "-c", "--max-concurrent",
         type=int,
-        default=5,
+        default=1,
         help="Maximum concurrent API calls (default: 5)"
     )
     parser.add_argument(
@@ -419,8 +413,6 @@ if __name__ == "__main__":
         csv_path=args.csv_path,
         output_path=args.output,
         model_name=args.model,
-        api_key=args.api_key,
-        base_url=args.base_url,
         api_key_file=args.api_key_file,
         max_concurrent=args.max_concurrent,
         row_matching_threshold=args.threshold,
