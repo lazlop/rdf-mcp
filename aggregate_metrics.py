@@ -50,7 +50,9 @@ def compute_aggregate_metrics(data):
             'arity_matching_f1': [],
             'exact_match_f1': [],
             'entity_set_f1': [],
-            'row_matching_f1': []
+            'row_matching_f1': [],
+            'best_column_entity_f1': [],
+            'best_column_row_f1': []
         },
         'by_query_id': defaultdict(lambda: {
             'count': 0,
@@ -60,7 +62,9 @@ def compute_aggregate_metrics(data):
             'arity_matching_f1': [],
             'exact_match_f1': [],
             'entity_set_f1': [],
-            'row_matching_f1': []
+            'row_matching_f1': [],
+            'best_column_entity_f1': [],
+            'best_column_row_f1': []
         }),
         'by_model': defaultdict(lambda: {
             'count': 0,
@@ -70,7 +74,9 @@ def compute_aggregate_metrics(data):
             'arity_matching_f1': [],
             'exact_match_f1': [],
             'entity_set_f1': [],
-            'row_matching_f1': []
+            'row_matching_f1': [],
+            'best_column_entity_f1': [],
+            'best_column_row_f1': []
         })
     }
     
@@ -91,6 +97,8 @@ def compute_aggregate_metrics(data):
         exact_f1 = convert_to_numeric(row.get('exact_match_f1'))
         entity_f1 = convert_to_numeric(row.get('entity_set_f1'))
         row_f1 = convert_to_numeric(row.get('row_matching_f1'))
+        best_entity_f1 = convert_to_numeric(row.get('best_column_entity_f1'))
+        best_row_f1 = convert_to_numeric(row.get('best_column_row_f1'))
         
         # Overall metrics
         metrics['token_usage']['prompt_tokens'].append(prompt_tokens)
@@ -101,6 +109,8 @@ def compute_aggregate_metrics(data):
         metrics['f1_scores']['exact_match_f1'].append(exact_f1)
         metrics['f1_scores']['entity_set_f1'].append(entity_f1)
         metrics['f1_scores']['row_matching_f1'].append(row_f1)
+        metrics['f1_scores']['best_column_entity_f1'].append(best_entity_f1)
+        metrics['f1_scores']['best_column_row_f1'].append(best_row_f1)
         
         # By query_id
         metrics['by_query_id'][query_id]['count'] += 1
@@ -111,6 +121,8 @@ def compute_aggregate_metrics(data):
         metrics['by_query_id'][query_id]['exact_match_f1'].append(exact_f1)
         metrics['by_query_id'][query_id]['entity_set_f1'].append(entity_f1)
         metrics['by_query_id'][query_id]['row_matching_f1'].append(row_f1)
+        metrics['by_query_id'][query_id]['best_column_entity_f1'].append(best_entity_f1)
+        metrics['by_query_id'][query_id]['best_column_row_f1'].append(best_row_f1)
         
         # By model
         metrics['by_model'][model]['count'] += 1
@@ -121,6 +133,8 @@ def compute_aggregate_metrics(data):
         metrics['by_model'][model]['exact_match_f1'].append(exact_f1)
         metrics['by_model'][model]['entity_set_f1'].append(entity_f1)
         metrics['by_model'][model]['row_matching_f1'].append(row_f1)
+        metrics['by_model'][model]['best_column_entity_f1'].append(best_entity_f1)
+        metrics['by_model'][model]['best_column_row_f1'].append(best_row_f1)
     
     return metrics
 
@@ -176,7 +190,8 @@ def format_report(metrics):
     report.append("OVERALL F1 SCORES")
     report.append("=" * 80)
     
-    for f1_type in ['arity_matching_f1', 'exact_match_f1', 'entity_set_f1', 'row_matching_f1']:
+    for f1_type in ['arity_matching_f1', 'exact_match_f1', 'entity_set_f1', 'row_matching_f1',
+                    'best_column_entity_f1', 'best_column_row_f1']:
         stats = compute_statistics(metrics['f1_scores'][f1_type])
         report.append(f"\n{f1_type.replace('_', ' ').title()}:")
         report.append(f"  Mean:     {stats['mean']:.4f}")
@@ -207,11 +222,15 @@ def format_report(metrics):
         exact_stats = compute_statistics(data['exact_match_f1'])
         entity_stats = compute_statistics(data['entity_set_f1'])
         row_stats = compute_statistics(data['row_matching_f1'])
+        best_entity_stats = compute_statistics(data['best_column_entity_f1'])
+        best_row_stats = compute_statistics(data['best_column_row_f1'])
         
         report.append(f"  F1 Scores - Arity: {arity_stats['mean']:.3f}, "
                      f"Exact: {exact_stats['mean']:.3f}, "
                      f"Entity: {entity_stats['mean']:.3f}, "
-                     f"Row: {row_stats['mean']:.3f}")
+                     f"Row: {row_stats['mean']:.3f}, "
+                     f"Best Entity: {best_entity_stats['mean']:.3f}, "
+                     f"Best Row: {best_row_stats['mean']:.3f}")
     
     # By Model
     report.append("\n" + "=" * 80)
@@ -264,7 +283,8 @@ def export_json(metrics, output_path):
             metrics['token_usage'][token_type]
         )
     
-    for f1_type in ['arity_matching_f1', 'exact_match_f1', 'entity_set_f1', 'row_matching_f1']:
+    for f1_type in ['arity_matching_f1', 'exact_match_f1', 'entity_set_f1', 'row_matching_f1',
+                    'best_column_entity_f1', 'best_column_row_f1']:
         json_data['overall']['f1_scores'][f1_type] = compute_statistics(
             metrics['f1_scores'][f1_type]
         )
@@ -282,7 +302,9 @@ def export_json(metrics, output_path):
                 'arity_matching_f1': compute_statistics(data['arity_matching_f1']),
                 'exact_match_f1': compute_statistics(data['exact_match_f1']),
                 'entity_set_f1': compute_statistics(data['entity_set_f1']),
-                'row_matching_f1': compute_statistics(data['row_matching_f1'])
+                'row_matching_f1': compute_statistics(data['row_matching_f1']),
+                'best_column_entity_f1': compute_statistics(data['best_column_entity_f1']),
+                'best_column_row_f1': compute_statistics(data['best_column_row_f1'])
             }
         }
     
@@ -299,7 +321,9 @@ def export_json(metrics, output_path):
                 'arity_matching_f1': compute_statistics(data['arity_matching_f1']),
                 'exact_match_f1': compute_statistics(data['exact_match_f1']),
                 'entity_set_f1': compute_statistics(data['entity_set_f1']),
-                'row_matching_f1': compute_statistics(data['row_matching_f1'])
+                'row_matching_f1': compute_statistics(data['row_matching_f1']),
+                'best_column_entity_f1': compute_statistics(data['best_column_entity_f1']),
+                'best_column_row_f1': compute_statistics(data['best_column_row_f1'])
             }
         }
     

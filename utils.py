@@ -22,7 +22,8 @@ from SPARQLWrapper import JSON, SPARQLWrapper
 from metrics import (
     get_arity_matching_f1,
     get_entity_and_row_matching_f1,
-    get_exact_match_f1
+    get_exact_match_f1,
+    get_best_column_matching_f1
 )
 
 
@@ -112,7 +113,8 @@ LOG_FIELDNAMES = [
     'entity_set_f1',
     'row_matching_f1',
     'less_columns_flag',
-    'prompt_tokens', 'completion_tokens', 'total_tokens'
+    'prompt_tokens', 'completion_tokens', 'total_tokens',
+    'best_column_entity_f1', 'best_column_row_f1'
 ]
 
 class CsvLogger:

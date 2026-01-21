@@ -12,6 +12,7 @@ from typing import Dict, List
 
 # Assuming these are your imports from the agent code
 from agent import SimpleSparqlAgentMCP, CsvLogger  # Update with actual module name
+from metrics import get_best_column_matching_f1
 
 # Load benchmark configuration
 config_path = Path("benchmark-config.json")
