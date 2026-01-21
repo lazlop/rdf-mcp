@@ -345,7 +345,14 @@ def describe_entity(
     entity: str | URIRef,
 ) -> str:
     """
-    Describe an entity by extracting its local subgraph.
+    Describe an entity by extracting its local subgraph. 
+    Local subgraph can be used to identify the correct relationships between entities and their types.
+    
+    Args:
+        entity: The URI of the entity to describe.
+    
+    Returns:
+        A string containing the local subgraph of the entity.
     """
     g = _ensure_graph_loaded() 
 
@@ -400,11 +407,9 @@ def describe_entity(
 @mcp.tool()
 def get_building_summary() -> Dict[str, Any]:
     """
-    Get a summary of the building model including:
-    - All Brick or S223 classes present and their counts
-    - All relationship types (predicates) and their counts
-    
-    Returns a structured overview of what's in the building model.
+    Gets a summary of the building model to support query generation, including:
+    - All classes present and their counts
+    - All relationship types and their counts
     """
     g = _ensure_graph_loaded()
     
@@ -446,19 +451,19 @@ def get_building_summary() -> Dict[str, Any]:
         pred_name = pred_str        
         relationship_counts[pred_name] = int(row['count'])
     
-    summary = (
-        f"Building model contains {len(g)} total triples, "
-        f"{len(class_counts)} distinct classes, "
-        f"and {len(relationship_counts)} distinct relationship types."
-    )
+    # summary = (
+    #     f"Building model contains {len(g)} total triples, "
+    #     f"{len(class_counts)} distinct classes, "
+    #     f"and {len(relationship_counts)} distinct relationship types."
+    # )
     
     return {
-        "summary": summary,
-        "total_triples": len(g),
+        # "summary": summary,
+        # "total_triples": len(g),
         "class_counts": class_counts,
         "relationship_counts": relationship_counts,
-        "total_classes": len(class_counts),
-        "total_relationship_types": len(relationship_counts)
+        # "total_classes": len(class_counts),
+        # "total_relationship_types": len(relationship_counts)
     }
 
 @mcp.tool()
@@ -467,7 +472,7 @@ def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) 
     Find all entities of a given class type.
     
     Args:
-        klass: The class name
+        klass: The URI of the class to search for.
         include_subclasses: If True, also returns entities of subclasses (default: True)
     
     Returns:
@@ -548,11 +553,11 @@ def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) 
     )
     
     return {
-        "summary": summary,
+        # "summary": summary,
         "class_searched": f"{klass}",
         "entities": unique_entities,
-        "count": len(unique_entities),
-        "include_subclasses": include_subclasses
+        # "count": len(unique_entities),
+        # "include_subclasses": include_subclasses
     }
 
 def _format_rdflib_results(qres) -> Dict[str, Any]:
@@ -588,8 +593,7 @@ def _timeout_handler(signum, frame):
 @mcp.tool()
 def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     """
-    Executes a SPARQL query with a timeout (default 60 seconds). If the query exceeds the timeout,
-    returns an error message asking for a more specific query.
+    Executes a SPARQL query and returns first 10 results. 
     """
     # Set alarm for timeout
     signal.signal(signal.SIGALRM, _timeout_handler)

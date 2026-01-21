@@ -25,10 +25,12 @@ from SPARQLWrapper import JSON, SPARQLWrapper
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from metrics import (
+from scripts.metrics import (
     get_arity_matching_f1,
-    get_entity_and_row_matching_f1,
-    get_exact_match_f1
+    get_entity_set_f1,
+    get_row_matching_f1,
+    get_exact_match_f1,
+    get_best_subset_column_f1
 )
 
 from scripts.utils import CsvLogger
@@ -42,7 +44,6 @@ class SparqlQuery(BaseModel):
 
 class QueryCritique(BaseModel):
     """Model for the critique agent's structured feedback."""
-    decision: str = Field(..., description="The decision, either 'IMPROVE' or 'FINAL'.")
     feedback: str = Field(..., description="Natural language feedback explaining the decision and what to improve.")
 
 
@@ -61,7 +62,7 @@ class SimpleSparqlAgentMCP:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
-        mcp_server_script: str = "kgqa.py",
+        mcp_server_script: str = "../agents/kgqa.py",
     ):
         """
         Initialize the SPARQL Agent with MCP support and query review.
@@ -200,27 +201,31 @@ class SimpleSparqlAgentMCP:
 
         print(f"\n🚀 Starting query generation with review for: '{nl_question}'")
         
+        # Initialize tool call tracking
+        tool_calls_exceeded = False
+        actual_tool_calls = 0
+        
         # System prompt for query writer
         query_writer_system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
+            f"You are a SPARQL developer for Brick Schema and ASHRAE 223p. "
             f"Generate a complete SPARQL query to answer the user's question. "
-            f"You can use the provided MCP tools to explore the knowledge graph and generate the query. "
-            f"If you receive feedback on a previous attempt, use it to improve your query."
+            f"CALL THE AVAILABLE TOOLS TO GENERATE OR IMPROVE THE QUERY. "
+            f"IF THE USER QUESTION MENTIONS SOMETHING IN THE SEMANTIC MODEL, THEN IT MUST BE RETRIEVED IN THE QUERY."
+            # f"You may use up to {self.max_tool_calls // 2} tool calls per iteration.\n\n"
+            # f"If you receive feedback on a previous attempt, use it to improve your query."
         )
 
         # System prompt for critique agent
         critique_system_prompt = (
             f"You are an expert in SPARQL, especially for Brick Schema and ASHRAE 223p. "
-            f"Your job is to review a SPARQL query and its execution results based on the original question. "
-            f"Decide if the query correctly answers the question or needs improvement.\n\n"
-            f"Respond with:\n"
-            f"- decision: 'FINAL' if the query is correct and complete, or 'IMPROVE' if it needs changes\n"
-            f"- feedback: Detailed explanation of what's correct or what needs to be improved\n\n"
-            f"Consider:\n"
-            f"- Does the query syntactically execute without errors?\n"
-            f"- Do the results match what the question is asking for?\n"
-            f"- Are all required entities/properties included?\n"
-            f"- Is the query returning the right number and type of results?"
+            f"Your job is to review a SPARQL query and its results based on the original question. "
+            f"Decide if the query correctly answers the question or if it needs improvement.\n\n"
+            f"Make sure the results include every piece of information mentioned in the question"
+            f"Respond with feedback explaining what needs to be improved\n\n"
+            # f"Respond with:\n"
+            # f"- feedback: Explanation of what needs to be improved\n\n"
+            # f"- decision: if you improved the SPARQL query, respond with 'IMPROVE'. If the input SPARQL query doesn't need to be improved respond with 'FINAL'. \n"
+            # f"DO NOT RESPOND 'FINAL' IF THE QUERY RETURNS NO RESULTS OR IF YOU SUGGEST ANY CHANGES.\n"
         )
 
         final_generated_query = ""
@@ -260,8 +265,28 @@ class SimpleSparqlAgentMCP:
                                 self.completion_tokens += usage.response_tokens
                                 self.total_tokens += usage.total_tokens
                         
-                        final_generated_query = writer_result.data.sparql_query
-                        print(f"   -> Generated query:\n{final_generated_query}")
+                        # Count tool calls from messages
+                        # In pydantic-ai, tool calls are in ModelRequest messages with ToolCallPart parts
+                        iteration_tool_calls = 0
+                        for msg in writer_messages:
+                            if hasattr(msg, 'parts'):
+                                for part in msg.parts:
+                                    # Check if this part is a tool call
+                                    if hasattr(part, 'part_kind') and part.part_kind == 'tool-call':
+                                        iteration_tool_calls += 1
+                                    # Alternative: check the type name
+                                    elif type(part).__name__ == 'ToolCallPart':
+                                        iteration_tool_calls += 1
+                        actual_tool_calls += iteration_tool_calls
+                        
+                        # Check if tool calls exceeded limit
+                        if actual_tool_calls > self.max_tool_calls:
+                            tool_calls_exceeded = True
+                            print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
+                            final_generated_query = ""
+                        else:
+                            final_generated_query = writer_result.data.sparql_query
+                            print(f"   -> Generated query (used {iteration_tool_calls} tool calls this iteration, {actual_tool_calls}/{self.max_tool_calls} total):\n{final_generated_query}")
                         
                         if writer_messages:
                             self.messages.extend([str(msg) for msg in writer_messages])
@@ -309,16 +334,16 @@ class SimpleSparqlAgentMCP:
                                 self.total_tokens += usage.total_tokens
                         
                         critique = critique_result.data
-                        print(f"   -> Critique Decision: {critique.decision}")
+                        # print(f"   -> Critique Decision: {critique.decision}")
                         print(f"   -> Critique Feedback: {critique.feedback}")
                         
                         if critique_messages:
                             self.messages.extend([str(msg) for msg in critique_messages])
                     
-                    # Check if we should stop iterating
-                    if critique.decision == "FINAL":
-                        print("\n✅ Critique Agent approved the query. Refinement complete.")
-                        break
+                    # # Check if we should stop iterating
+                    # if critique.decision == "FINAL":
+                    #     print("\n✅ Critique Agent approved the query. Refinement complete.")
+                    #     break
                     
                     # Prepare feedback for next iteration
                     last_feedback = critique.feedback
@@ -336,7 +361,10 @@ class SimpleSparqlAgentMCP:
             final_generated_query = ""
 
         if not final_generated_query:
-            print("💔 Could not generate a query")
+            if tool_calls_exceeded:
+                print(f"💔 Could not generate a query - tool call limit exceeded ({actual_tool_calls}/{self.max_tool_calls})")
+            else:
+                print("💔 Could not generate a query")
             log_entry = {
                 **eval_data,
                 'model': self.model_name,
@@ -353,7 +381,11 @@ class SimpleSparqlAgentMCP:
                 'entity_set_f1': 0.0,
                 'row_matching_f1': 0.0,
                 'exact_match_f1': 0.0,
+                'best_subset_column_f1': 0.0,
                 'less_columns_flag': True,
+                'tool_calls_exceeded': tool_calls_exceeded,
+                'actual_tool_calls': actual_tool_calls,
+                'max_tool_calls': self.max_tool_calls,
                 'prompt_tokens': self.prompt_tokens,
                 'completion_tokens': self.completion_tokens,
                 'total_tokens': self.total_tokens
@@ -370,7 +402,7 @@ class SimpleSparqlAgentMCP:
             gt_results_obj = None
             
         # Calculate metrics
-        arity_f1, entity_set_f1, row_matching_f1, exact_match_f1 = 0.0, 0.0, 0.0, 0.0
+        arity_f1, entity_set_f1, row_matching_f1, exact_match_f1, best_subset_column_f1 = 0.0, 0.0, 0.0, 0.0, 0.0
         less_columns_flag = False
         
         if gt_results_obj and gt_results_obj["syntax_ok"] and gen_results_obj["syntax_ok"]:
@@ -378,10 +410,10 @@ class SimpleSparqlAgentMCP:
             pred_rows = gen_results_obj["results"]
             
             arity_f1 = get_arity_matching_f1(final_generated_query, ground_truth_sparql)
-            entity_and_row_f1 = get_entity_and_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
-            entity_set_f1 = entity_and_row_f1['entity_set_f1']
-            row_matching_f1 = entity_and_row_f1['row_matching_f1']
+            entity_set_f1 = get_entity_set_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            row_matching_f1 = get_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
             exact_match_f1 = get_exact_match_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            best_subset_column_f1 = get_best_subset_column_f1(gold_rows=gold_rows, pred_rows=pred_rows)
             less_columns_flag = gen_results_obj['col_count'] < gt_results_obj['col_count']
         
         log_entry = {
@@ -400,7 +432,11 @@ class SimpleSparqlAgentMCP:
             'entity_set_f1': entity_set_f1,
             'row_matching_f1': row_matching_f1,
             'exact_match_f1': exact_match_f1,
+            'best_subset_column_f1': best_subset_column_f1,
             'less_columns_flag': less_columns_flag,
+            'tool_calls_exceeded': tool_calls_exceeded,
+            'actual_tool_calls': actual_tool_calls,
+            'max_tool_calls': self.max_tool_calls,
             'prompt_tokens': self.prompt_tokens,
             'completion_tokens': self.completion_tokens,
             'total_tokens': self.total_tokens

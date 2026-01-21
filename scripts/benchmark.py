@@ -12,7 +12,8 @@ from typing import Dict, List
 
 # Import agent and utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.agent import SimpleSparqlAgentMCP
+# from agents.agent import SimpleSparqlAgentMCP
+from agents.react_agent import SimpleSparqlAgentMCP
 from scripts.utils import CsvLogger
 
 # Load benchmark configuration

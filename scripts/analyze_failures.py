@@ -127,7 +127,7 @@ Analyze the provided information carefully and classify the failure with evidenc
     def __init__(
         self,
         model_name: Optional[str] = "lbl/cborg-coder",
-        api_key_file: Optional[str] = "analysis-config.json",
+        api_key_file: Optional[str] = "../configs/analysis-config.json",
         max_message_history_chars: int = 8000,
     ):
         """
@@ -304,7 +304,7 @@ async def analyze_failures_async(
     csv_path: str,
     output_path: Optional[str] = None,
     model_name: str = "lbl/cborg-coder",
-    api_key_file: Optional[str] = "analysis-config.json",
+    api_key_file: Optional[str] = "../configs/analysis-config.json",
     row_matching_threshold: float = 1.0,
     max_message_history_chars: int = 8000,
 ) -> pd.DataFrame:
@@ -389,7 +389,7 @@ def analyze_failures(
     csv_path: str,
     output_path: Optional[str] = None,
     model_name: str = "lbl/cborg-coder",
-    api_key_file: Optional[str] = "analysis-config.json",
+    api_key_file: Optional[str] = "../configs/analysis-config.json",
     row_matching_threshold: float = 1.0,
     max_message_history_chars: int = 8000,
 ) -> pd.DataFrame:
@@ -437,7 +437,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-f", "--api-key-file",
         help="Path to YAML file with API credentials",
-        default="analysis-config.json"
+        default="../configs/analysis-config.json"
     )
     parser.add_argument(
         "-t", "--threshold",

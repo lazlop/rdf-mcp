@@ -37,6 +37,9 @@ from scripts.utils import CsvLogger
 
 from agents.kgqa import sparql_query
 
+
+RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
+
 class SparqlQuery(BaseModel):
     """Model for the agent's output."""
     sparql_query: str = Field(..., description="The generated SPARQL query.")
@@ -53,7 +56,7 @@ class SimpleSparqlAgentMCP:
         sparql_endpoint: str, # just a graph file for now
         model_name: str = "lbl/cborg-coder",
         max_tool_calls: int = 20,
-        max_iterations: int = 2,
+        max_iterations: int = 10,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
@@ -79,6 +82,7 @@ class SimpleSparqlAgentMCP:
         self.completion_tokens = 0
         self.total_tokens = 0
         self.messages = []
+        self.max_iterations = max_iterations
 
         # Load API credentials
         if api_key:
@@ -197,9 +201,9 @@ class SimpleSparqlAgentMCP:
         system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
             f"Generate a complete SPARQL query to answer the user's question. "
-            f"You can use the provided MCP tools to generate the query."
-            f"Use the sparql_query tool to ensure the final query is correct before returning the final result."
-            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
+            f"Use the provided MCP tools to generate the query."
+            f"Begin by calling the get_building_summary. "
+            # f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
         )
 
         user_message = f"Question: {nl_question}"
@@ -209,39 +213,45 @@ class SimpleSparqlAgentMCP:
         actual_tool_calls = 0
         
         try:
-            with capture_run_messages() as messages:
-                async with self.agent.run_mcp_servers():
-                    async def _run_agent():
-                        return await self.agent.run(
-                            user_message,
-                            message_history=[],
-                            system_prompt=system_prompt
-                        )
-                    result = await self._exponential_backoff(_run_agent)
-                    
-                    # track tokens
-                    if hasattr(result, 'usage'):
-                        usage = result.usage()
-                        if usage:
-                            self.prompt_tokens += usage.request_tokens
-                            self.completion_tokens += usage.response_tokens
-                            self.total_tokens += usage.total_tokens
-                    
-                    # Count tool calls from messages
-                    actual_tool_calls = sum(1 for msg in messages if hasattr(msg, 'kind') and msg.kind == 'request-tool')
-                    
-                    # Check if tool calls exceeded limit
-                    if actual_tool_calls > self.max_tool_calls:
-                        tool_calls_exceeded = True
-                        print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
-                        generated_query = ""
-                    else:
-                        generated_query = result.data.sparql_query
-                        print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
-                    
-                    # Optional: Print message history for debugging
-            if messages:
-                self.messages += [str(msg) for msg in messages]
+            for i in range(self.max_iterations):
+                with capture_run_messages() as messages:
+                    async with self.agent.run_mcp_servers():
+                        async def _run_agent():
+                            return await self.agent.run(
+                                user_message,
+                                message_history=[],
+                                system_prompt=system_prompt
+                            )
+                        result = await self._exponential_backoff(_run_agent)
+                        
+                        # track tokens
+                        if hasattr(result, 'usage'):
+                            usage = result.usage()
+                            if usage:
+                                self.prompt_tokens += usage.request_tokens
+                                self.completion_tokens += usage.response_tokens
+                                self.total_tokens += usage.total_tokens
+                        
+                        # Count tool calls from messages
+                        actual_tool_calls = sum(1 for msg in messages if hasattr(msg, 'kind') and msg.kind == 'request-tool')
+                        
+                        # Check if tool calls exceeded limit
+                        if actual_tool_calls > self.max_tool_calls:
+                            tool_calls_exceeded = True
+                            print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
+                            generated_query = ""
+                        else:
+                            generated_query = result.data.sparql_query
+                            print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
+                        query_results = sparql_query(generated_query, result_length = -1)
+                        if query_results and query_results['row_count'] > 0:
+                            print(f"   -> Query returned {query_results['row_count']} results.")
+                            break
+                        else:
+                            print(f"   -> Query returned no results. Retrying ({i+1}/{self.max_iterations})...")
+                        
+                if messages:
+                    self.messages += [str(msg) for msg in messages]
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
             traceback.print_exc()
