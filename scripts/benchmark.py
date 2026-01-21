@@ -74,7 +74,7 @@ def load_kg_content(ttl_path: Path) -> str:
 async def process_building_queries(
     json_data: List[Dict],
     logger: CsvLogger,
-    max_tool_calls: int = 5,
+    max_tool_calls: int = 20,
 ) -> None:
     """
     Process all queries for a single building.
