@@ -13,87 +13,29 @@ from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK
 
 mcp = FastMCP("GraphDemo", dependencies=["rdflib", "oxrdflib"])
 
-# Define standard namespaces that are not building-specific
+# Define namespaces to exclude from shortest path search
 QUDT = Namespace("http://qudt.org/schema/qudt/")
-STANDARD_NAMESPACES = [
-    str(S223),
-    str(BRICK),
-    str(QUDT),
-    "http://qudt.org/"
+EXCLUDED_NAMESPACES = [
+    str(RDF),
+    str(RDFS),
+    str(SH),
+    str(QUDT)
 ]
 
-# Cache for building namespace
-_building_namespace_cache = None
+# Specific predicates to exclude
+EXCLUDED_PREDICATES = [
+    BRICK.aliasOf,
+    BRICK.hasAssociatedTag
+]
 
-def _get_building_namespace(g: Graph) -> Optional[str]:
-    """
-    Identify the building namespace by finding the namespace (excluding S223, Brick, QUDT)
-    that has the most unique URIs in the graph.
-    
-    Returns:
-        The building namespace as a string, or None if not found
-    """
-    global _building_namespace_cache
-    
-    # Return cached value if available
-    if _building_namespace_cache is not None:
-        return _building_namespace_cache
-    
-    # Count URIs by namespace
-    namespace_counts = {}
-    
-    # Check all subjects and objects in the graph
-    for s, p, o in g:
-        # Count subject namespaces
-        if isinstance(s, URIRef):
-            s_str = str(s)
-            # Extract namespace (everything before the last # or /)
-            if '#' in s_str:
-                ns = s_str.rsplit('#', 1)[0] + '#'
-            elif '/' in s_str:
-                ns = s_str.rsplit('/', 1)[0] + '/'
-            else:
-                continue
-            
-            # Skip standard namespaces
-            if any(ns.startswith(std_ns) for std_ns in STANDARD_NAMESPACES):
-                continue
-            
-            namespace_counts[ns] = namespace_counts.get(ns, 0) + 1
-        
-        # Count object namespaces
-        if isinstance(o, URIRef):
-            o_str = str(o)
-            # Extract namespace
-            if '#' in o_str:
-                ns = o_str.rsplit('#', 1)[0] + '#'
-            elif '/' in o_str:
-                ns = o_str.rsplit('/', 1)[0] + '/'
-            else:
-                continue
-            
-            # Skip standard namespaces
-            if any(ns.startswith(std_ns) for std_ns in STANDARD_NAMESPACES):
-                continue
-            
-            namespace_counts[ns] = namespace_counts.get(ns, 0) + 1
-    
-    # Find the namespace with the most URIs
-    if namespace_counts:
-        building_ns = max(namespace_counts.items(), key=lambda x: x[1])[0]
-        _building_namespace_cache = building_ns
-        print(f"🏢 Identified building namespace: {building_ns} ({namespace_counts[building_ns]} URIs)")
-        return building_ns
-    
-    return None
-
-def _is_building_node(node: URIRef, building_namespace: Optional[str]) -> bool:
-    """Check if a node belongs to the building namespace."""
-    if building_namespace is None:
-        return True  # If no building namespace identified, allow all nodes
-    
-    node_str = str(node)
-    return node_str.startswith(building_namespace)
+def _is_excluded_predicate(pred: URIRef) -> bool:
+    """Check if a predicate belongs to an excluded namespace or is a specific excluded predicate."""
+    # Check if it's a specifically excluded predicate
+    if pred in EXCLUDED_PREDICATES:
+        return True
+    # Check if it belongs to an excluded namespace
+    pred_str = str(pred)
+    return any(pred_str.startswith(ns) for ns in EXCLUDED_NAMESPACES)
 
 # ontology can be brick or 223 
 ontology_brick = Graph(store = "Oxigraph").parse("https://brickschema.org/schema/1.4/Brick.ttl")
@@ -701,7 +643,7 @@ def find_shortest_path(
     end_uri: str
 ) -> Dict[str, Any]:
     """
-    Find the shortest path of predicates between two URIs in the graph using BFS.
+    Find the shortest path of predicates between two entities in the graph.
     
     Args:
         start_uri: The starting URI
@@ -783,11 +725,8 @@ def _unidirectional_bfs(
     max_depth: int
 ) -> Dict[str, Any]:
     """
-    Perform unidirectional BFS to find shortest path through building nodes.
+    Perform unidirectional BFS to find shortest path.
     """
-    # Get building namespace
-    building_namespace = _get_building_namespace(g)
-    
     # Queue stores: (current_node, path_nodes, path_predicates)
     queue = deque([(start, [start], [])])
     visited = {start}
@@ -801,11 +740,10 @@ def _unidirectional_bfs(
         
         # Explore outgoing edges (current as subject)
         for pred, obj in g.predicate_objects(current):
+            # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+            if _is_excluded_predicate(pred):
+                continue
             if isinstance(obj, URIRef):
-                # Only follow paths through building nodes
-                if not _is_building_node(obj, building_namespace):
-                    continue
-                    
                 if obj == end:
                     # Found the target
                     return {
@@ -822,11 +760,10 @@ def _unidirectional_bfs(
         
         # Explore incoming edges (current as object)
         for subj, pred in g.subject_predicates(current):
+            # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+            if _is_excluded_predicate(pred):
+                continue
             if isinstance(subj, URIRef):
-                # Only follow paths through building nodes
-                if not _is_building_node(subj, building_namespace):
-                    continue
-                    
                 if subj == end:
                     # Found the target
                     return {
@@ -855,11 +792,8 @@ def _bidirectional_bfs(
     max_depth: int
 ) -> Dict[str, Any]:
     """
-    Perform bidirectional BFS to find shortest path through building nodes.
+    Perform bidirectional BFS to find shortest path more efficiently.
     """
-    # Get building namespace
-    building_namespace = _get_building_namespace(g)
-    
     # Forward search from start
     forward_queue = deque([(start, [start], [])])
     forward_visited = {start: ([], [])}  # node -> (path_nodes, path_predicates)
@@ -882,11 +816,10 @@ def _bidirectional_bfs(
                 
                 # Explore outgoing edges
                 for pred, obj in g.predicate_objects(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
                     if isinstance(obj, URIRef):
-                        # Only follow paths through building nodes
-                        if not _is_building_node(obj, building_namespace):
-                            continue
-                            
                         # Check if we've met the backward search
                         if obj in backward_visited:
                             back_path, back_preds = backward_visited[obj]
@@ -906,11 +839,10 @@ def _bidirectional_bfs(
                 
                 # Explore incoming edges
                 for subj, pred in g.subject_predicates(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
                     if isinstance(subj, URIRef):
-                        # Only follow paths through building nodes
-                        if not _is_building_node(subj, building_namespace):
-                            continue
-                            
                         # Check if we've met the backward search
                         if subj in backward_visited:
                             back_path, back_preds = backward_visited[subj]
@@ -935,11 +867,10 @@ def _bidirectional_bfs(
                 
                 # Explore incoming edges (going backward)
                 for subj, pred in g.subject_predicates(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
                     if isinstance(subj, URIRef):
-                        # Only follow paths through building nodes
-                        if not _is_building_node(subj, building_namespace):
-                            continue
-                            
                         # Check if we've met the forward search
                         if subj in forward_visited:
                             fwd_path, fwd_preds = forward_visited[subj]
@@ -959,11 +890,10 @@ def _bidirectional_bfs(
                 
                 # Explore outgoing edges (going backward)
                 for pred, obj in g.predicate_objects(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
                     if isinstance(obj, URIRef):
-                        # Only follow paths through building nodes
-                        if not _is_building_node(obj, building_namespace):
-                            continue
-                            
                         # Check if we've met the forward search
                         if obj in forward_visited:
                             fwd_path, fwd_preds = forward_visited[obj]

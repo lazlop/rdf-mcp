@@ -3,7 +3,7 @@ test_mcp.py - Basic test script for GraphDemo MCP tools
 """
 import os
 import sys
-
+from rdflib import URIRef
 # Set up environment variable for graph file
 # Update this path to point to your actual Brick TTL file
 GRAPH_FILE = "test-building.ttl"
@@ -172,8 +172,8 @@ def test_sparql_query():
 def test_shortest_path():
     """Test 6: Find shortest path between entities"""
     print_section("TEST 6: Shortest Path Finding")
-    entity1_uri = BRICK['VAV']
-    entity2_uri = BRICK['Point']
+    entity1_uri = URIRef("http://buildsys.org/ontologies/bldg11#VAVRM0101")
+    entity2_uri = URIRef("http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM0101.VLV_2_COMD")
     # First, find two entities to test with
     try:
         # Test 1: Bidirectional search
