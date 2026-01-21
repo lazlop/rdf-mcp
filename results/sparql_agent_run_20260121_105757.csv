@@ -1,0 +1,49 @@
+query_id,question_number,source,question,model,message_history,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,tool_calls_exceeded,actual_tool_calls,max_tool_calls,prompt_tokens,completion_tokens,total_tokens,best_column_entity_f1,best_column_row_f1
+LBNL_001,,,"Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.",lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content='Question: Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.', timestamp=datetime.datetime(2026, 1, 21, 18, 57, 59, 604362, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>\\nPREFIX s223: <http://example.org/s223#>\\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\\nPREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\\n\\nSELECT DISTINCT ?zone ?zoneLabel WHERE {\\n  # Entity must be a Zone\\n  ?zone a brick:Zone .\\n  OPTIONAL { ?zone rdfs:label ?zoneLabel . }\\n  \\n  {\\n    # Directly associated Property (any predicate linking the zone to a Property)\\n    ?zone ?anyPredicate ?property .\\n    ?property a brick:Property .\\n  }\\n  UNION\\n  {\\n    # Indirect connection via a RoomDomainSpace (any length path of connections)\\n    ?zone (rdf:* ) ?room .\\n    ?room a s223:RoomDomainSpace .\\n    ?room (rdf:* ) ?property .\\n    ?property a brick:Property .\\n  }\\n}""}', tool_call_id='chatcmpl-tool-ef81cfb50a57456ea7e201124572b3a0', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 18, 57, 59, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-ef81cfb50a57456ea7e201124572b3a0', timestamp=datetime.datetime(2026, 1, 21, 18, 58, 2, 107500, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')","PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX brick: <https://brickschema.org/schema/1.1/Brick#>
+PREFIX s223: <http://example.org/s223#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT DISTINCT ?zone ?zoneLabel WHERE {
+  # Entity must be a Zone
+  ?zone a brick:Zone .
+  OPTIONAL { ?zone rdfs:label ?zoneLabel . }
+  
+  {
+    # Directly associated Property (any predicate linking the zone to a Property)
+    ?zone ?anyPredicate ?property .
+    ?property a brick:Property .
+  }
+  UNION
+  {
+    # Indirect connection via a RoomDomainSpace (any length path of connections)
+    ?zone (rdf:* ) ?room .
+    ?room a s223:RoomDomainSpace .
+    ?room (rdf:* ) ?property .
+    ?property a brick:Property .
+  }
+}",True,False,False,353,4,0,2,0.6666666666666666,0.0,0.0,0.0,True,False,0,20,430,750,1180,,

@@ -383,7 +383,7 @@ def get_building_summary() -> Dict[str, Any]:
     """
     g = _ensure_graph_loaded()
     
-    # Count entities by Brick class using SPARQL
+    # Count entities by class using SPARQL
     class_query = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     
@@ -397,7 +397,7 @@ def get_building_summary() -> Dict[str, Any]:
     
     class_counts = {}
     for row in g.query(class_query):
-        class_name = str(row['class'])# .replace(str(BRICK), "brick:")
+        class_name = str(row['class'])
         class_counts[class_name] = int(row['count'])
     
     # Count relationships by predicate type using SPARQL
@@ -442,7 +442,7 @@ def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) 
     Find all entities of a given class type.
     
     Args:
-        klass: The Brick or S223 class name (e.g., 'VAV', 'Temperature_Sensor', 'Air_Handling_Unit')
+        klass: The Brick or S223 class name
         include_subclasses: If True, also returns entities of subclasses (default: True)
     
     Returns:
@@ -451,7 +451,7 @@ def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) 
     g = _ensure_graph_loaded()
     class_uri = URIRef(klass)
     
-    # Check if the class exists in the Brick ontology
+    # Check if the class exists in the ontology
     if (class_uri, RDF.type, None) not in ontology and \
        (class_uri, RDFS.subClassOf, None) not in ontology:
         return {
@@ -477,7 +477,7 @@ def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) 
             for entity in g.subjects(RDF.type, target_class):
                 entity_info = {
                     "uri": str(entity),
-                    "class": str(target_class) #.replace(str(BRICK), "brick:")
+                    "class": str(target_class)
                 }
                 
                 # Try to get a label

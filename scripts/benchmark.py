@@ -10,10 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-# Assuming these are your imports from the agent code
+# Import agent and utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.agent import SimpleSparqlAgentMCP, CsvLogger  # Update with actual module name
-from metrics import get_best_column_matching_f1
+from agents.agent import SimpleSparqlAgentMCP
+from scripts.utils import CsvLogger
 
 # Load benchmark configuration
 config_path = Path("../configs/benchmark-config.json")

@@ -25,10 +25,12 @@ from SPARQLWrapper import JSON, SPARQLWrapper
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from metrics import (
+from scripts.metrics import (
     get_arity_matching_f1,
-    get_entity_and_row_matching_f1,
-    get_exact_match_f1
+    get_entity_set_f1,
+    get_row_matching_f1,
+    get_exact_match_f1,
+    get_best_subset_column_f1
 )
 
 from scripts.utils import CsvLogger
@@ -266,6 +268,7 @@ class SimpleSparqlAgentMCP:
             'entity_set_f1': 0.0,
             'row_matching_f1': 0.0,
             'exact_match_f1': 0.0,
+            'best_subset_column_f1': 0.0,
             'less_columns_flag': True,
             'tool_calls_exceeded': tool_calls_exceeded,
             'actual_tool_calls': actual_tool_calls,
@@ -286,7 +289,7 @@ class SimpleSparqlAgentMCP:
         if ground_truth_sparql:
             gt_results_obj = sparql_query(ground_truth_sparql, result_length = -1)        
         # Calculate metrics
-        arity_f1, entity_set_f1, row_matching_f1, exact_match_f1 = 0.0, 0.0, 0.0, 0.0
+        arity_f1, entity_set_f1, row_matching_f1, exact_match_f1, best_subset_column_f1 = 0.0, 0.0, 0.0, 0.0, 0.0
         less_columns_flag = False
         
         if gt_results_obj and gt_results_obj["syntax_ok"] and gen_results_obj["syntax_ok"]:
@@ -294,10 +297,10 @@ class SimpleSparqlAgentMCP:
             pred_rows = gen_results_obj["results"]
             
             arity_f1 = get_arity_matching_f1(generated_query, ground_truth_sparql)
-            entity_and_row_f1 = get_entity_and_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
-            entity_set_f1 = entity_and_row_f1['entity_set_f1']
-            row_matching_f1 = entity_and_row_f1['row_matching_f1']
+            entity_set_f1 = get_entity_set_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            row_matching_f1 = get_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
             exact_match_f1 = get_exact_match_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            best_subset_column_f1 = get_best_subset_column_f1(gold_rows=gold_rows, pred_rows=pred_rows)
             less_columns_flag = gen_results_obj['col_count'] < gt_results_obj['col_count']
         
         log_entry = {
@@ -316,6 +319,7 @@ class SimpleSparqlAgentMCP:
             'entity_set_f1': entity_set_f1,
             'row_matching_f1': row_matching_f1,
             'exact_match_f1': exact_match_f1,
+            'best_subset_column_f1': best_subset_column_f1,
             'less_columns_flag': less_columns_flag,
             'tool_calls_exceeded': tool_calls_exceeded,
             'actual_tool_calls': actual_tool_calls,
