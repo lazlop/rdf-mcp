@@ -49,17 +49,25 @@ async def main_async(args):
     await run_benchmark()
     
     # Find the most recent CSV file in the results directory
-    results_dir = Path("results")
-    if not results_dir.exists():
-        results_dir = Path(".")
+    # Check both relative to project root and current directory
+    possible_results_dirs = [
+        Path(__file__).parent.parent / "results",  # Project root results dir
+        Path("results"),  # Relative to current dir
+        Path("../results"),  # One level up
+        Path("."),  # Current directory
+    ]
     
-    csv_files = sorted(results_dir.glob("*_run_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not csv_files:
-        # Try current directory
-        csv_files = sorted(Path(".").glob("*_run_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+    csv_files = []
+    for results_dir in possible_results_dirs:
+        if results_dir.exists():
+            found_files = sorted(results_dir.glob("*_run_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if found_files:
+                csv_files = found_files
+                break
     
     if not csv_files:
         print("ERROR: No benchmark results file found!")
+        print(f"Searched in: {[str(d) for d in possible_results_dirs]}")
         return
     
     benchmark_csv = csv_files[0]
@@ -81,16 +89,16 @@ async def main_async(args):
     report = format_report(metrics)
     print("\n" + report)
     
-    # Save text report
+    # Save text report (use the same directory as the CSV file)
     report_filename = benchmark_csv.stem + "_metrics_report.txt"
-    report_path = results_dir / report_filename if results_dir.exists() else Path(report_filename)
+    report_path = benchmark_csv.parent / report_filename
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report)
     print(f"\nText report saved to: {report_path}")
     
-    # Export JSON
+    # Export JSON (use the same directory as the CSV file)
     json_filename = benchmark_csv.stem + "_metrics.json"
-    json_path = results_dir / json_filename if results_dir.exists() else Path(json_filename)
+    json_path = benchmark_csv.parent / json_filename
     export_json(metrics, str(json_path))
     print(f"JSON metrics saved to: {json_path}")
     
@@ -101,7 +109,7 @@ async def main_async(args):
         print("=" * 80)
         
         failure_output = benchmark_csv.stem + "_failure_analysis.csv"
-        failure_path = results_dir / failure_output if results_dir.exists() else Path(failure_output)
+        failure_path = benchmark_csv.parent / failure_output
         
         try:
             analyzed_df = await analyze_failures_async(
