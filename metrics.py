@@ -321,3 +321,174 @@ def get_exact_match_f1(gold_rows: List[Dict], pred_rows: List[Dict]) -> float:
     
     scores = _calculate_scores_for_mapping(gold_rows, pred_rows, positional_mapping)
     return scores['row_wise']['f1']
+
+def get_best_column_entity_f1(gold_rows: List[Dict], pred_rows: List[Dict], timeout: int = 1200) -> float:
+    """
+    Calculates Entity F1 score for the best matching columns only.
+    
+    When the predicted and gold results have different numbers of columns,
+    this metric finds the best partial alignment and computes entity F1 
+    only on the matched columns. Unmatched columns are disregarded.
+    
+    This answers: "For the columns that can be aligned, how well do the 
+    entity sets match?" It's useful when you want to evaluate partial 
+    correctness even if the query structure isn't perfect.
+    
+    Args:
+        gold_rows: The list of ground-truth result rows.
+        pred_rows: The list of predicted result rows.
+        timeout: Maximum seconds to spend finding the best column mapping.
+    
+    Returns:
+        The entity F1 score for the best column alignment found, between 0.0 and 1.0.
+    """
+    if not gold_rows and not pred_rows:
+        return 1.0
+    if not gold_rows or not pred_rows:
+        return 0.0
+    
+    gold_cols = list(gold_rows[0].keys())
+    pred_cols = list(pred_rows[0].keys())
+    n_gold_cols, n_pred_cols = len(gold_cols), len(pred_cols)
+    
+    # Determine how many columns to match (the minimum of the two)
+    n_cols_to_match = min(n_gold_cols, n_pred_cols)
+    
+    if n_cols_to_match == 0:
+        return 0.0
+    
+    best_entity_f1 = 0.0
+    start_time = time.time()
+    
+    # Generate all ways to choose n_cols_to_match columns from each side
+    gold_col_combinations = itertools.combinations(gold_cols, n_cols_to_match)
+    
+    for gold_col_subset in gold_col_combinations:
+        pred_col_permutations = itertools.permutations(pred_cols, n_cols_to_match)
+        
+        for pred_col_perm in pred_col_permutations:
+            if time.time() - start_time > timeout:
+                print(f"  -> ⚠️  Best column entity F1 evaluation timed out after {timeout} seconds.")
+                return best_entity_f1
+            
+            # Create mapping between the selected columns
+            current_mapping = {pred_col_perm[i]: gold_col_subset[i] for i in range(n_cols_to_match)}
+            
+            # Calculate entity F1 for this mapping
+            col_precisions, col_recalls = [], []
+            for pred_col, gold_col in current_mapping.items():
+                gold_values = {str(r.get(gold_col, {}).get('value', '')) for r in gold_rows}
+                pred_values = {str(r.get(pred_col, {}).get('value', '')) for r in pred_rows}
+                
+                tp = len(gold_values.intersection(pred_values))
+                col_prec = tp / len(pred_values) if pred_values else 1.0
+                col_rec = tp / len(gold_values) if gold_values else 1.0
+                col_precisions.append(col_prec)
+                col_recalls.append(col_rec)
+            
+            avg_precision = np.mean(col_precisions) if col_precisions else 0.0
+            avg_recall = np.mean(col_recalls) if col_recalls else 0.0
+            entity_f1 = (2 * avg_precision * avg_recall / (avg_precision + avg_recall)
+                        if (avg_precision + avg_recall) > 0 else 0.0)
+            
+            best_entity_f1 = max(best_entity_f1, entity_f1)
+            
+            # Early exit if perfect score found
+            if best_entity_f1 == 1.0:
+                return best_entity_f1
+    
+    return best_entity_f1
+
+def get_best_column_matching_f1(gold_rows: List[Dict], pred_rows: List[Dict], timeout: int = 1200) -> Dict[str, float]:
+    """
+    Calculates both Entity F1 and Row F1 for the best matching columns.
+    
+    This is more efficient than calling the individual functions separately
+    when you need both metrics, as it only searches for the best mapping once.
+    
+    Returns:
+        Dictionary with 'entity_f1' and 'row_f1' keys.
+    """
+    if not gold_rows and not pred_rows:
+        return {'entity_f1': 1.0, 'row_f1': 1.0}
+    if not gold_rows or not pred_rows:
+        return {'entity_f1': 0.0, 'row_f1': 0.0}
+    
+    gold_cols = list(gold_rows[0].keys())
+    pred_cols = list(pred_rows[0].keys())
+    n_gold_cols, n_pred_cols = len(gold_cols), len(pred_cols)
+    
+    n_cols_to_match = min(n_gold_cols, n_pred_cols)
+    
+    if n_cols_to_match == 0:
+        return {'entity_f1': 0.0, 'row_f1': 0.0}
+    
+    best_entity_f1 = 0.0
+    best_row_f1 = 0.0
+    start_time = time.time()
+    
+    gold_col_combinations = itertools.combinations(gold_cols, n_cols_to_match)
+    
+    for gold_col_subset in gold_col_combinations:
+        pred_col_permutations = itertools.permutations(pred_cols, n_cols_to_match)
+        
+        for pred_col_perm in pred_col_permutations:
+            if time.time() - start_time > timeout:
+                print(f"  -> ⚠️  Best column matching F1 evaluation timed out after {timeout} seconds.")
+                return {'entity_f1': best_entity_f1, 'row_f1': best_row_f1}
+            
+            current_mapping = {pred_col_perm[i]: gold_col_subset[i] for i in range(n_cols_to_match)}
+            mapped_gold_keys = set(gold_col_subset)
+            
+            # Calculate entity F1
+            col_precisions, col_recalls = [], []
+            for pred_col, gold_col in current_mapping.items():
+                gold_values = {str(r.get(gold_col, {}).get('value', '')) for r in gold_rows}
+                pred_values = {str(r.get(pred_col, {}).get('value', '')) for r in pred_rows}
+                
+                tp = len(gold_values.intersection(pred_values))
+                col_prec = tp / len(pred_values) if pred_values else 1.0
+                col_rec = tp / len(gold_values) if gold_values else 1.0
+                col_precisions.append(col_prec)
+                col_recalls.append(col_rec)
+            
+            avg_precision = np.mean(col_precisions) if col_precisions else 0.0
+            avg_recall = np.mean(col_recalls) if col_recalls else 0.0
+            entity_f1 = (2 * avg_precision * avg_recall / (avg_precision + avg_recall)
+                        if (avg_precision + avg_recall) > 0 else 0.0)
+            
+            # Calculate row F1
+            normalized_pred_rows = [
+                {current_mapping.get(k): v for k, v in r.items() if k in current_mapping} 
+                for r in pred_rows
+            ]
+            
+            matched_gold, matched_pred = set(), set()
+            for i, g_row in enumerate(gold_rows):
+                for j, norm_p_row in enumerate(normalized_pred_rows):
+                    if j in matched_pred:
+                        continue
+                    if row_to_partial_tuple(g_row, mapped_gold_keys) == row_to_partial_tuple(norm_p_row, mapped_gold_keys):
+                        matched_gold.add(i)
+                        matched_pred.add(j)
+                        break
+            
+            tp_row = len(matched_gold)
+            fp_row = len(pred_rows) - len(matched_pred)
+            fn_row = len(gold_rows) - len(matched_gold)
+            
+            precision_row = tp_row / (tp_row + fp_row) if (tp_row + fp_row) > 0 else 1.0
+            recall_row = tp_row / (tp_row + fn_row) if (tp_row + fn_row) > 0 else 1.0
+            row_f1 = (2 * precision_row * recall_row / (precision_row + recall_row)
+                     if (precision_row + recall_row) > 0 else 0.0)
+            
+            # Update best scores
+            if entity_f1 > best_entity_f1 or (entity_f1 == best_entity_f1 and row_f1 > best_row_f1):
+                best_entity_f1 = entity_f1
+                best_row_f1 = row_f1
+            
+            # Early exit if perfect scores found
+            if best_entity_f1 == 1.0 and best_row_f1 == 1.0:
+                return {'entity_f1': best_entity_f1, 'row_f1': best_row_f1}
+    
+    return {'entity_f1': best_entity_f1, 'row_f1': best_row_f1}

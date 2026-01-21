@@ -1,0 +1,15 @@
+query_id,question_number,source,question,model,message_history,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens
+MORTAR_001,,,What are the brick points in this graph?,lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content='Question: What are the brick points in this graph?', timestamp=datetime.datetime(2026, 1, 19, 23, 4, 55, 47223, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')",SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"SELECT ?point ?label WHERE {
+  ?point a ?class .
+  ?class rdfs:subClassOf* brick:Point .
+  OPTIONAL { ?point rdfs:label ?label . }
+}",True,True,False,1346,2,1286,2,1.0,0.0,0.5,0.0,False,415,296,711
+MORTAR_001,,,Can you find nodes that has information about an external reference?,lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content='Question: Can you find nodes that has information about an external reference?', timestamp=datetime.datetime(2026, 1, 19, 23, 6, 14, 278293, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')",SELECT ?point ?point_type WHERE { ?point rdf:type/rdfs:subClassOf* brick:Point . ?point rdf:type ?point_type . },"PREFIX brick: <https://brickschema.org/schema/Brick#>
+PREFIX brref: <https://brickschema.org/schema/Brick/ref#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?entity ?label ?externalRef WHERE {
+  ?entity brref:hasExternalReference ?externalRef .
+  OPTIONAL { ?entity rdfs:label ?label }
+}
+LIMIT 100",True,True,False,1346,2,99,3,0.8,0.0,0.07300884955752213,0.0,False,7792,557,8349

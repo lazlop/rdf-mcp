@@ -342,12 +342,31 @@ async def analyze_failures_async(
     print(f"\n🔍 Analyzing {len(failures_df)} failures...")
     analyzed_df = await analyzer.analyze_batch(failures_df)
     
+    # Select only the required columns
+    required_columns = [
+        'query_id',
+        'question_number',
+        'question',
+        'model',
+        'failure_category',
+        'failure_evidence',
+        'secondary_category'
+    ]
+    
+    # Filter to only include columns that exist in the dataframe
+    available_columns = [col for col in required_columns if col in analyzed_df.columns]
+    if len(available_columns) < len(required_columns):
+        missing = set(required_columns) - set(available_columns)
+        print(f"⚠️  Warning: Missing columns in input CSV: {missing}")
+    
+    output_df = analyzed_df[available_columns]
+    
     # Save results
     if output_path is None:
         base_path = Path(csv_path)
         output_path = base_path.parent / f"{base_path.stem}_analyzed{base_path.suffix}"
     
-    analyzed_df.to_csv(output_path, index=False)
+    output_df.to_csv(output_path, index=False)
     print(f"\n✅ Analysis complete! Results saved to: {output_path}")
     
     # Print summary statistics
@@ -429,8 +448,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-message-chars",
         type=int,
-        default=8000,
-        help="Maximum characters to include from message history (default: 8000, ~4000 tokens)"
+        default=4000,
+        help="Maximum characters to include from message history (default: 4000, ~2000 tokens)"
     )
     
     args = parser.parse_args()
