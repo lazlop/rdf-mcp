@@ -1,0 +1,152 @@
+query_id,question_number,source,question,model,message_history,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,best_subset_column_f1,less_columns_flag,tool_calls_exceeded,actual_tool_calls,max_tool_calls,prompt_tokens,completion_tokens,total_tokens
+LBNL_001,,,"Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.",lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content='Question: Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 53, 608959, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>\\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\\n\\nSELECT DISTINCT ?zone ?property WHERE {\\n  ?zone a brick:Zone .\\n  {\\n    # Direct association: any predicate linking the zone directly to a Property\\n    ?zone ?directPred ?property .\\n    ?property a brick:Property .\\n  } UNION {\\n    # Indirect association via one or more RoomDomainSpace (modeled here as brick:Room)\\n    ?zone (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?room .\\n    ?room a brick:Room .\\n    ?room (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?property .\\n    ?property a brick:Property .\\n  }\\n}\\nORDER BY ?zone""}', tool_call_id='chatcmpl-tool-90a7a5ac1dc54448ab035de01d770f54', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 53, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-90a7a5ac1dc54448ab035de01d770f54', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 56, 610473, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')","PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?zone ?property WHERE {
+  ?zone a brick:Zone .
+  {
+    # Direct association: any predicate linking the zone directly to a Property
+    ?zone ?directPred ?property .
+    ?property a brick:Property .
+  } UNION {
+    # Indirect association via one or more RoomDomainSpace (modeled here as brick:Room)
+    ?zone (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?room .
+    ?room a brick:Room .
+    ?room (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?property .
+    ?property a brick:Property .
+  }
+}
+ORDER BY ?zone",True,False,False,353,4,0,2,0.6666666666666666,0.0,0.0,0.0,0.0,True,False,0,20,533,685,1218
+LBNL_001,,,"For each zone (target), what are the related non-writable property labels and ALC and MPC endpoint references?",lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content='Question: Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 53, 608959, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>\\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\\n\\nSELECT DISTINCT ?zone ?property WHERE {\\n  ?zone a brick:Zone .\\n  {\\n    # Direct association: any predicate linking the zone directly to a Property\\n    ?zone ?directPred ?property .\\n    ?property a brick:Property .\\n  } UNION {\\n    # Indirect association via one or more RoomDomainSpace (modeled here as brick:Room)\\n    ?zone (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?room .\\n    ?room a brick:Room .\\n    ?room (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?property .\\n    ?property a brick:Property .\\n  }\\n}\\nORDER BY ?zone""}', tool_call_id='chatcmpl-tool-90a7a5ac1dc54448ab035de01d770f54', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 53, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-90a7a5ac1dc54448ab035de01d770f54', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 56, 610473, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')
+ModelRequest(parts=[UserPromptPart(content='Question: For each zone (target), what are the related non-writable property labels and ALC and MPC endpoint references?', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 59, 76084, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""SELECT ?zone ?zoneLabel ?propLabel ?alcEndpoint ?mpcEndpoint WHERE {\\n  # Identify zones (targets)\\n  ?zone a s223:Zone .\\n  OPTIONAL { ?zone rdfs:label ?zoneLabel . }\\n\\n  # Find related non\\u2011writable properties and their labels\\n  ?zone ?prop ?value .\\n  ?prop a s223:NonWritableProperty .\\n  ?prop rdfs:label ?propLabel .\\n\\n  # Retrieve ALC and MPC endpoint references, if present\\n  OPTIONAL { ?zone s223:hasALCEndpoint ?alcEndpoint . }\\n  OPTIONAL { ?zone s223:hasMPCEndpoint ?mpcEndpoint . }\\n}\\nORDER BY ?zone""}', tool_call_id='chatcmpl-tool-3296fe9816f749bba1cfabb66a6876f1', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 59, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-3296fe9816f749bba1cfabb66a6876f1', timestamp=datetime.datetime(2026, 1, 21, 20, 29, 1, 789233, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')","PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","SELECT ?zone ?zoneLabel ?propLabel ?alcEndpoint ?mpcEndpoint WHERE {
+  # Identify zones (targets)
+  ?zone a s223:Zone .
+  OPTIONAL { ?zone rdfs:label ?zoneLabel . }
+
+  # Find related non‑writable properties and their labels
+  ?zone ?prop ?value .
+  ?prop a s223:NonWritableProperty .
+  ?prop rdfs:label ?propLabel .
+
+  # Retrieve ALC and MPC endpoint references, if present
+  OPTIONAL { ?zone s223:hasALCEndpoint ?alcEndpoint . }
+  OPTIONAL { ?zone s223:hasMPCEndpoint ?mpcEndpoint . }
+}
+ORDER BY ?zone",True,False,False,353,4,0,5,0.8888888888888888,0.0,0.0,0.0,0.0,False,False,0,20,523,607,1130
+LBNL_001,,,"For each Zone that either has a Property directly or has a RoomDomainSpace reached by two connected steps and a contains relationship leading to a Property, what is the label of that Property and what are the external reference alc endpoint and mpc endpoint when writable is False?",lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content='Question: Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 53, 608959, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>\\nPREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\\n\\nSELECT DISTINCT ?zone ?property WHERE {\\n  ?zone a brick:Zone .\\n  {\\n    # Direct association: any predicate linking the zone directly to a Property\\n    ?zone ?directPred ?property .\\n    ?property a brick:Property .\\n  } UNION {\\n    # Indirect association via one or more RoomDomainSpace (modeled here as brick:Room)\\n    ?zone (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?room .\\n    ?room a brick:Room .\\n    ?room (brick:hasLocation|brick:hasPart|brick:contains|brick:hasEquipment)* ?property .\\n    ?property a brick:Property .\\n  }\\n}\\nORDER BY ?zone""}', tool_call_id='chatcmpl-tool-90a7a5ac1dc54448ab035de01d770f54', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 53, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-90a7a5ac1dc54448ab035de01d770f54', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 56, 610473, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')
+ModelRequest(parts=[UserPromptPart(content='Question: For each zone (target), what are the related non-writable property labels and ALC and MPC endpoint references?', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 59, 76084, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""SELECT ?zone ?zoneLabel ?propLabel ?alcEndpoint ?mpcEndpoint WHERE {\\n  # Identify zones (targets)\\n  ?zone a s223:Zone .\\n  OPTIONAL { ?zone rdfs:label ?zoneLabel . }\\n\\n  # Find related non\\u2011writable properties and their labels\\n  ?zone ?prop ?value .\\n  ?prop a s223:NonWritableProperty .\\n  ?prop rdfs:label ?propLabel .\\n\\n  # Retrieve ALC and MPC endpoint references, if present\\n  OPTIONAL { ?zone s223:hasALCEndpoint ?alcEndpoint . }\\n  OPTIONAL { ?zone s223:hasMPCEndpoint ?mpcEndpoint . }\\n}\\nORDER BY ?zone""}', tool_call_id='chatcmpl-tool-3296fe9816f749bba1cfabb66a6876f1', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 20, 28, 59, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-3296fe9816f749bba1cfabb66a6876f1', timestamp=datetime.datetime(2026, 1, 21, 20, 29, 1, 789233, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')
+ModelRequest(parts=[UserPromptPart(content='Question: For each Zone that either has a Property directly or has a RoomDomainSpace reached by two connected steps and a contains relationship leading to a Property, what is the label of that Property and what are the external reference alc endpoint and mpc endpoint when writable is False?', timestamp=datetime.datetime(2026, 1, 21, 20, 29, 3, 682308, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>\\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\\nPREFIX s223: <https://w3id.org/saref#>\\n\\nSELECT DISTINCT ?zoneLabel ?propLabel ?alcEndpoint ?mpcEndpoint\\nWHERE {\\n  # ---- Zones ----------------------------------------------------\\n  ?zone a brick:Zone .\\n  OPTIONAL { ?zone rdfs:label ?zoneLabel . }\\n\\n  # ---- Case 1: Property directly attached to the Zone -------------\\n  { ?zone brick:hasProperty ?prop . }\\n\\n  UNION\\n\\n  # ---- Case 2: Property reachable via a RoomDomainSpace in exactly two steps ----\\n  {\\n    # Two arbitrary hops from the Zone to a RoomDomainSpace (any direction)\\n    ?zone (<>|^<>){2} ?roomSpace .\\n    ?roomSpace a brick:RoomDomainSpace .\\n    ?roomSpace brick:contains ?prop .\\n  }\\n\\n  # ---- Property details ------------------------------------------\\n  ?prop rdfs:label ?propLabel .\\n\\n  # external reference \\u2013 alc endpoint (writable = false)\\n  ?prop brick:externalReferenceAlcEndpoint ?alcRef .\\n  ?alcRef brick:writable false ;\\n          brick:hasEndpoint ?alcEndpoint .\\n\\n  # external reference \\u2013 mpc endpoint (writable = false)\\n  ?prop brick:externalReferenceMpcEndpoint ?mpcRef .\\n  ?mpcRef brick:writable false ;\\n          brick:hasEndpoint ?mpcEndpoint .\\n}\\nORDER BY ?zoneLabel ?propLabel""}', tool_call_id='chatcmpl-tool-6d2f7dc34afc4e109b63b97a742b3705', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 21, 20, 29, 3, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-6d2f7dc34afc4e109b63b97a742b3705', timestamp=datetime.datetime(2026, 1, 21, 20, 29, 6, 701741, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')","PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX brick: <https://brickschema.org/schema/1.3/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX s223: <https://w3id.org/saref#>
+
+SELECT DISTINCT ?zoneLabel ?propLabel ?alcEndpoint ?mpcEndpoint
+WHERE {
+  # ---- Zones ----------------------------------------------------
+  ?zone a brick:Zone .
+  OPTIONAL { ?zone rdfs:label ?zoneLabel . }
+
+  # ---- Case 1: Property directly attached to the Zone -------------
+  { ?zone brick:hasProperty ?prop . }
+
+  UNION
+
+  # ---- Case 2: Property reachable via a RoomDomainSpace in exactly two steps ----
+  {
+    # Two arbitrary hops from the Zone to a RoomDomainSpace (any direction)
+    ?zone (<>|^<>){2} ?roomSpace .
+    ?roomSpace a brick:RoomDomainSpace .
+    ?roomSpace brick:contains ?prop .
+  }
+
+  # ---- Property details ------------------------------------------
+  ?prop rdfs:label ?propLabel .
+
+  # external reference – alc endpoint (writable = false)
+  ?prop brick:externalReferenceAlcEndpoint ?alcRef .
+  ?alcRef brick:writable false ;
+          brick:hasEndpoint ?alcEndpoint .
+
+  # external reference – mpc endpoint (writable = false)
+  ?prop brick:externalReferenceMpcEndpoint ?mpcRef .
+  ?mpcRef brick:writable false ;
+          brick:hasEndpoint ?mpcEndpoint .
+}
+ORDER BY ?zoneLabel ?propLabel",False,False,False,353,4,0,0,0.0,0.0,0.0,0.0,0.0,False,False,0,20,553,674,1227

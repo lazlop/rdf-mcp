@@ -1,8 +1,9 @@
 from mcp.server.fastmcp import FastMCP
-from rdflib import Graph, URIRef, Literal, Namespace, BRICK, RDFS, RDF, BNode
+from rdflib import Graph, URIRef, Literal, Namespace, BRICK, RDFS, RDF, BNode, SH
 from rdflib.term import Variable
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
+from collections import deque
 import os 
 import sys
 import signal
@@ -11,6 +12,30 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK
 
 mcp = FastMCP("GraphDemo", dependencies=["rdflib", "oxrdflib"])
+
+# Define namespaces to exclude from shortest path search
+QUDT = Namespace("http://qudt.org/schema/qudt/")
+EXCLUDED_NAMESPACES = [
+    str(RDF),
+    str(RDFS),
+    str(SH),
+    str(QUDT)
+]
+
+# Specific predicates to exclude
+EXCLUDED_PREDICATES = [
+    BRICK.aliasOf,
+    BRICK.hasAssociatedTag
+]
+
+def _is_excluded_predicate(pred: URIRef) -> bool:
+    """Check if a predicate belongs to an excluded namespace or is a specific excluded predicate."""
+    # Check if it's a specifically excluded predicate
+    if pred in EXCLUDED_PREDICATES:
+        return True
+    # Check if it belongs to an excluded namespace
+    pred_str = str(pred)
+    return any(pred_str.startswith(ns) for ns in EXCLUDED_NAMESPACES)
 
 # ontology can be brick or 223 
 ontology_brick = Graph(store = "Oxigraph").parse("https://brickschema.org/schema/1.4/Brick.ttl")
@@ -442,7 +467,7 @@ def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) 
     Find all entities of a given class type.
     
     Args:
-        klass: The Brick or S223 class name
+        klass: The class name
         include_subclasses: If True, also returns entities of subclasses (default: True)
     
     Returns:
@@ -611,3 +636,284 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
         }
     finally:
         signal.alarm(0)
+
+@mcp.tool()
+def find_shortest_path(
+    start_uri: str,
+    end_uri: str
+) -> Dict[str, Any]:
+    """
+    Find the shortest path of predicates between two URIs in the graph using BFS.
+    
+    Args:
+        start_uri: The starting URI
+        end_uri: The ending URI
+    
+    Returns:
+        Dictionary containing the shortest path information including:
+        - path: List of nodes in the path
+        - predicates: List of predicates connecting the nodes
+        - length: Length of the path
+        - found: Whether a path was found
+    """
+    g = _ensure_graph_loaded()
+
+    max_depth: int = 7
+    bidirectional: bool = True
+    
+    # Convert strings to URIRefs
+    start = URIRef(start_uri)
+    end = URIRef(end_uri)
+    
+    # Validate that both URIs exist in the graph
+    start_exists = any(g.triples((start, None, None))) or any(g.triples((None, None, start)))
+    end_exists = any(g.triples((end, None, None))) or any(g.triples((None, None, end)))
+    
+    if not start_exists:
+        return {
+            "summary": f"Start URI not found in graph: {start_uri}",
+            "found": False,
+            "path": [],
+            "predicates": [],
+            "length": 0,
+            "error": "start_uri_not_found"
+        }
+    
+    if not end_exists:
+        return {
+            "summary": f"End URI not found in graph: {end_uri}",
+            "found": False,
+            "path": [],
+            "predicates": [],
+            "length": 0,
+            "error": "end_uri_not_found"
+        }
+    
+    # Check if start and end are the same
+    if start == end:
+        return {
+            "summary": f"Start and end URIs are identical",
+            "found": True,
+            "path": [str(start)],
+            "predicates": [],
+            "length": 0
+        }
+    
+    if bidirectional:
+        result = _bidirectional_bfs(g, start, end, max_depth)
+    else:
+        result = _unidirectional_bfs(g, start, end, max_depth)
+    
+    if result["found"]:
+        path_str = " -> ".join([f"{node}" for node in result["path"]])
+        pred_str = " -> ".join([f"{pred}" for pred in result["predicates"]])
+        summary = (
+            f"Found path of length {result['length']} from {start_uri} to {end_uri}.\n"
+            f"Path: {path_str}\n"
+            f"Predicates: {pred_str}"
+        )
+    else:
+        summary = f"No path found between {start_uri} and {end_uri} within {max_depth} hops"
+    
+    result["summary"] = summary
+    return result
+
+def _unidirectional_bfs(
+    g: Graph,
+    start: URIRef,
+    end: URIRef,
+    max_depth: int
+) -> Dict[str, Any]:
+    """
+    Perform unidirectional BFS to find shortest path.
+    """
+    # Queue stores: (current_node, path_nodes, path_predicates)
+    queue = deque([(start, [start], [])])
+    visited = {start}
+    
+    while queue:
+        current, path_nodes, path_predicates = queue.popleft()
+        
+        # Check if we've exceeded max depth
+        if len(path_nodes) > max_depth:
+            continue
+        
+        # Explore outgoing edges (current as subject)
+        for pred, obj in g.predicate_objects(current):
+            # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+            if _is_excluded_predicate(pred):
+                continue
+            if isinstance(obj, URIRef):
+                if obj == end:
+                    # Found the target
+                    return {
+                        "found": True,
+                        "path": [str(node) for node in path_nodes + [obj]],
+                        "predicates": [str(pred) for pred in path_predicates + [pred]],
+                        "length": len(path_nodes),
+                        "direction": "forward"
+                    }
+                
+                if obj not in visited:
+                    visited.add(obj)
+                    queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
+        
+        # Explore incoming edges (current as object)
+        for subj, pred in g.subject_predicates(current):
+            # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+            if _is_excluded_predicate(pred):
+                continue
+            if isinstance(subj, URIRef):
+                if subj == end:
+                    # Found the target
+                    return {
+                        "found": True,
+                        "path": [str(node) for node in path_nodes + [subj]],
+                        "predicates": [str(pred) for pred in path_predicates + [pred]],
+                        "length": len(path_nodes),
+                        "direction": "backward"
+                    }
+                
+                if subj not in visited:
+                    visited.add(subj)
+                    queue.append((subj, path_nodes + [subj], path_predicates + [pred]))
+    
+    return {
+        "found": False,
+        "path": [],
+        "predicates": [],
+        "length": 0
+    }
+
+def _bidirectional_bfs(
+    g: Graph,
+    start: URIRef,
+    end: URIRef,
+    max_depth: int
+) -> Dict[str, Any]:
+    """
+    Perform bidirectional BFS to find shortest path more efficiently.
+    """
+    # Forward search from start
+    forward_queue = deque([(start, [start], [])])
+    forward_visited = {start: ([], [])}  # node -> (path_nodes, path_predicates)
+    
+    # Backward search from end
+    backward_queue = deque([(end, [end], [])])
+    backward_visited = {end: ([], [])}  # node -> (path_nodes, path_predicates)
+    
+    depth = 0
+    
+    while forward_queue or backward_queue:
+        depth += 1
+        if depth > max_depth:
+            break
+        
+        # Expand forward frontier
+        if forward_queue:
+            for _ in range(len(forward_queue)):
+                current, path_nodes, path_predicates = forward_queue.popleft()
+                
+                # Explore outgoing edges
+                for pred, obj in g.predicate_objects(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
+                    if isinstance(obj, URIRef):
+                        # Check if we've met the backward search
+                        if obj in backward_visited:
+                            back_path, back_preds = backward_visited[obj]
+                            full_path = path_nodes + [obj] + back_path[::-1]
+                            full_preds = path_predicates + [pred] + back_preds[::-1]
+                            return {
+                                "found": True,
+                                "path": [str(node) for node in full_path],
+                                "predicates": [str(p) for p in full_preds],
+                                "length": len(full_path) - 1,
+                                "search_type": "bidirectional"
+                            }
+                        
+                        if obj not in forward_visited:
+                            forward_visited[obj] = (path_nodes + [obj], path_predicates + [pred])
+                            forward_queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
+                
+                # Explore incoming edges
+                for subj, pred in g.subject_predicates(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
+                    if isinstance(subj, URIRef):
+                        # Check if we've met the backward search
+                        if subj in backward_visited:
+                            back_path, back_preds = backward_visited[subj]
+                            full_path = path_nodes + [subj] + back_path[::-1]
+                            full_preds = path_predicates + [pred] + back_preds[::-1]
+                            return {
+                                "found": True,
+                                "path": [str(node) for node in full_path],
+                                "predicates": [str(p) for p in full_preds],
+                                "length": len(full_path) - 1,
+                                "search_type": "bidirectional"
+                            }
+                        
+                        if subj not in forward_visited:
+                            forward_visited[subj] = (path_nodes + [subj], path_predicates + [pred])
+                            forward_queue.append((subj, path_nodes + [subj], path_predicates + [pred]))
+        
+        # Expand backward frontier
+        if backward_queue:
+            for _ in range(len(backward_queue)):
+                current, path_nodes, path_predicates = backward_queue.popleft()
+                
+                # Explore incoming edges (going backward)
+                for subj, pred in g.subject_predicates(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
+                    if isinstance(subj, URIRef):
+                        # Check if we've met the forward search
+                        if subj in forward_visited:
+                            fwd_path, fwd_preds = forward_visited[subj]
+                            full_path = fwd_path + [current] + path_nodes[1:][::-1]
+                            full_preds = fwd_preds + [pred] + path_predicates[::-1]
+                            return {
+                                "found": True,
+                                "path": [str(node) for node in full_path],
+                                "predicates": [str(p) for p in full_preds],
+                                "length": len(full_path) - 1,
+                                "search_type": "bidirectional"
+                            }
+                        
+                        if subj not in backward_visited:
+                            backward_visited[subj] = (path_nodes + [subj], path_predicates + [pred])
+                            backward_queue.append((subj, path_nodes + [subj], path_predicates + [pred]))
+                
+                # Explore outgoing edges (going backward)
+                for pred, obj in g.predicate_objects(current):
+                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+                    if _is_excluded_predicate(pred):
+                        continue
+                    if isinstance(obj, URIRef):
+                        # Check if we've met the forward search
+                        if obj in forward_visited:
+                            fwd_path, fwd_preds = forward_visited[obj]
+                            full_path = fwd_path + [current] + path_nodes[1:][::-1]
+                            full_preds = fwd_preds + [pred] + path_predicates[::-1]
+                            return {
+                                "found": True,
+                                "path": [str(node) for node in full_path],
+                                "predicates": [str(p) for p in full_preds],
+                                "length": len(full_path) - 1,
+                                "search_type": "bidirectional"
+                            }
+                        
+                        if obj not in backward_visited:
+                            backward_visited[obj] = (path_nodes + [obj], path_predicates + [pred])
+                            backward_queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
+    
+    return {
+        "found": False,
+        "path": [],
+        "predicates": [],
+        "length": 0
+    }

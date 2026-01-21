@@ -2,7 +2,7 @@ Potential functions
 
 sparql_query - Execute raw SPARQL queries against the building's knowledge graph. This gives maximum flexibility for complex queries and allows the LLM to construct sophisticated queries when needed. Return first 10 results.
 
-get_entity_info - Retrieve all properties and relationships for a specific entity (equipment, space, point, etc.) by URI or label. This helps the LLM understand individual components deeply.
+describe_entity - Retrieve all properties and relationships for a specific entity (equipment, space, point, etc.) by URI or label. This helps the LLM understand individual components deeply.
 
 get_building_summary - Classes and their counts. Relationships and their counts.
 

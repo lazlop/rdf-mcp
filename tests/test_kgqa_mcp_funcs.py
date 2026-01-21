@@ -8,13 +8,16 @@ import sys
 # Update this path to point to your actual Brick TTL file
 GRAPH_FILE = "test-building.ttl"
 os.environ["GRAPH_FILE"] = GRAPH_FILE
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the MCP server functions
+from scripts.namespaces import BRICK, S223
 from agents.kgqa import (
-    get_entity_info,
+    describe_entity,
     sparql_query,
     get_building_summary,
     find_entities_by_type,
+    find_shortest_path,
     _ensure_graph_loaded
 )
 
@@ -104,7 +107,7 @@ def test_entity_info():
             print(f"📍 Testing with entity: {entity_uri}")
             
             # Get 1-hop info
-            info = get_entity_info(entity_uri, num_hops=1, get_classes=True)
+            info = describe_entity(entity_uri, num_hops=1, get_classes=True)
             print(f"✅ Retrieved entity info (1 hop)")
             print(f"   Turtle output length: {len(info)} characters")
             print(f"\n   First 500 characters:")
@@ -166,9 +169,49 @@ def test_sparql_query():
     except Exception as e:
         print(f"❌ Query 2 failed: {e}")
 
+def test_shortest_path():
+    """Test 6: Find shortest path between entities"""
+    print_section("TEST 6: Shortest Path Finding")
+    entity1_uri = BRICK['VAV']
+    entity2_uri = BRICK['Point']
+    # First, find two entities to test with
+    try:
+        # Test 1: Bidirectional search
+        print("\n🔍 Test 1: Bidirectional BFS")
+        path_result = find_shortest_path(entity1_uri, entity2_uri)
+        print(f"   {path_result['summary']}")
+        if path_result['found']:
+            print(f"   Path length: {path_result['length']}")
+            print(f"   predicates: {path_result['predicates']}")
+            if path_result['length'] <= 3:  # Only print full path if short
+                print(f"   Full path:")
+                for i, node in enumerate(path_result['path']):
+                    print(f"     {i}. {node}")
+                    if i < len(path_result['predicates']):
+                        print(f"        --[{path_result['predicates'][i]}]-->")
+        
+        # Test 2: Unidirectional search
+        print("\n🔍 Test 2: Unidirectional BFS")
+        path_result = find_shortest_path(entity1_uri, entity2_uri)
+        print(f"   {path_result['summary']}")
+        if path_result['found']:
+            print(f"   Path length: {path_result['length']}")
+        
+        # Test 3: Same start and end
+        print("\n🔍 Test 3: Same start and end URI")
+        path_result = find_shortest_path(entity1_uri, entity1_uri)
+        print(f"   {path_result['summary']}")
+        print(f"   Found: {path_result['found']}, Length: {path_result['length']}")
+            
+    except Exception as e:
+        print(f"❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def test_error_handling():
-    """Test 6: Error handling"""
-    print_section("TEST 6: Error Handling")
+    """Test 7: Error handling"""
+    print_section("TEST 7: Error Handling")
     
     # Test invalid class
     try:
@@ -205,6 +248,7 @@ def main():
         test_find_entities_by_type,
         test_entity_info,
         test_sparql_query,
+        test_shortest_path,
         test_error_handling
     ]
     
