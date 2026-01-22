@@ -18,13 +18,20 @@ from agents.agent import SimpleSparqlAgentMCP
 
 from scripts.utils import CsvLogger
 
-# Load benchmark configuration
-config_path = Path("../configs/benchmark-config.json")
-if not config_path.is_file():
-    print("Configuration file 'benchmark-config.json' not found.", file=sys.stderr)
-    sys.exit(1)
 
-config = json.load(open(config_path))
+def load_config(config_path: str = "../configs/benchmark-config.json") -> dict:
+    """Load benchmark configuration from specified path."""
+    path = Path(config_path)
+    if not path.is_file():
+        print(f"Configuration file '{config_path}' not found.", file=sys.stderr)
+        sys.exit(1)
+    
+    with open(path) as f:
+        return json.load(f)
+
+
+# Default configuration (will be overridden if config_path is provided to main_async)
+config = load_config()
 EXCLUDE_BUILDINGS = config.get("exclude-buildings", [])
 
 # Configuration - update these with your actual values
@@ -164,9 +171,29 @@ async def process_building_queries(
                 print(f"  Traceback: {traceback.format_exc()}")
 
 
-async def main_async() -> None:
-    """Async entry point for the benchmark run."""
+async def main_async(config_path: str = "../configs/benchmark-config.json") -> None:
+    """
+    Async entry point for the benchmark run.
+    
+    Args:
+        config_path: Path to the benchmark configuration file.
+    """
+    # Load configuration
+    global config, EXCLUDE_BUILDINGS, MODEL_NAME, API_KEY, BASE_URL, RESULTS_DIR
+    global BENCHMARK_DIR, PARSED_BUILDINGS_DIR, EVAL_BUILDINGS_DIR
+    
+    config = load_config(config_path)
+    EXCLUDE_BUILDINGS = config.get("exclude-buildings", [])
+    MODEL_NAME = config.get("models", [None])[0]
+    API_KEY = config.get("api-key")
+    BASE_URL = config.get("base-url")
+    RESULTS_DIR = Path(config.get("results-dir", "../results"))
+    BENCHMARK_DIR = Path(config.get("buildingqa-dir")) / "Benchmark_QA_pairs"
+    PARSED_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "eval_buildings"
+    EVAL_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "bschema" / "without-ontology"
+    
     print("Starting SPARQL Agent Benchmark Run")
+    print(f"Configuration: {config_path}")
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     logger, log_filename = create_timestamped_logger()

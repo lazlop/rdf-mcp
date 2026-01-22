@@ -57,7 +57,7 @@ class SimpleSparqlAgentMCP:
         sparql_endpoint: str, # just a graph file for now
         parsed_graph_file: str,
         model_name: str = "lbl/cborg-coder",
-        max_tool_calls: int = 10,
+        max_tool_calls: int = 50,
         max_iterations: int = 3,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
@@ -78,6 +78,7 @@ class SimpleSparqlAgentMCP:
             mcp_server_args: Custom arguments for MCP server
         """
         self.sparql_endpoint_url = sparql_endpoint
+        self.parsed_graph_file = parsed_graph_file
         self.model_name = model_name
         self.max_tool_calls = max_tool_calls
         self.prompt_tokens = 0
@@ -121,7 +122,7 @@ class SimpleSparqlAgentMCP:
 
         # Pass graph_file as environment variable to MCP server
         os.environ['GRAPH_FILE'] = self.sparql_endpoint_url
-        os.environ['PARSED_GRAPH_FILE'] = self.sparql_endpoint_url
+        os.environ['PARSED_GRAPH_FILE'] = self.parsed_graph_file
         mcp_env = os.environ.copy()          
         mcp_server_args = [
             "run", "--with", "mcp[cli]", "--with", "rdflib", 
@@ -141,12 +142,12 @@ class SimpleSparqlAgentMCP:
             provider=OpenAIProvider(base_url=self.base_url, api_key=self.api_key),
         )
 
-        # Create single agent
+        self.limits = UsageLimits(total_tokens_limit = 50000, request_limit = 30)
         self.agent = Agent(
             self.model,
             result_type=SparqlQuery,
             mcp_servers=[self.mcp_server],
-            usage_limits=UsageLimits(total_tokens_limit = 100000, request_limit = 30),  # High limit to avoid interruptions
+            usage_limits=self.limits,
             retries=3
         )
 
@@ -201,7 +202,7 @@ class SimpleSparqlAgentMCP:
         print(f"\n🚀 Generating query for: '{nl_question}'")
         recommended_tool_calls = self.max_tool_calls // 2
         system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223. \n"
+            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223. \n"
             f"Generate a complete SPARQL SELECT query to answer the user's question. \n"
             # f"Use the provided MCP tools to generate the query."
             # f"Begin by calling the get_building_summary. "
@@ -216,6 +217,7 @@ class SimpleSparqlAgentMCP:
         actual_tool_calls = 0
         
         try:
+            self.all_previous_messages = []
             for i in range(self.max_iterations):
                 iteration_tool_calls = 0
                 with capture_run_messages() as messages:
@@ -256,17 +258,16 @@ class SimpleSparqlAgentMCP:
                             generated_query = result.data.sparql_query
                             print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
                         query_results = sparql_query(generated_query, result_length = -1)
+                        self.all_previous_messages += [str(msg) for msg in messages]
                         if query_results and query_results['row_count'] > 0:
                             print(f"   -> Query returned {query_results['row_count']} results.")
                             break
                         else:
-                            print(f"   -> Query returned no results. Please write a simpler query using the available tools to ensure the query matches the graph and will return results ({i+1}/{self.max_iterations})...")
+                            print(f"   -> Query returned no results. Check each element of the query and try again ({i+1}/{self.max_iterations})...")
                             # self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
-                            self.messages = [f"Query failed to return results. Write a simpler query and use available tools to double check that the query will return results: {json.dumps(query_results)}"]
+                            messages = [f"Query failed to return results. Write a simpler query and use available tools to double check that the query will return results: : {json.dumps(query_results)}"]
                     if not RUN_UNTIL_RESULTS:
                         break
-                if messages:
-                    self.messages += [str(msg) for msg in messages]
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
             traceback.print_exc()
@@ -281,7 +282,7 @@ class SimpleSparqlAgentMCP:
             **eval_data,
             'model': self.model_name,
             'generated_sparql': generated_query,
-            'message_history': "\n".join(self.messages),
+            'message_history': "\n".join(self.all_previous_messages),
             'syntax_ok': False,
             'returns_results': False,
             'perfect_match': False,
@@ -332,7 +333,7 @@ class SimpleSparqlAgentMCP:
             **eval_data,
             'model': self.model_name,
             'generated_sparql': generated_query,
-            'message_history': "\n".join(self.messages),
+            'message_history': "\n".join(self.all_previous_messages),
             'syntax_ok': gen_results_obj['syntax_ok'],
             'returns_results': gen_results_obj['row_count'] > 0,
             'perfect_match': row_matching_f1 == 1.0,

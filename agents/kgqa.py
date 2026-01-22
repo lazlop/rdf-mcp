@@ -360,7 +360,6 @@ def describe_entity(
     
     Args:
         entity: The full URI of the entity
-        num_hops: The number of hops to traverse from the entity (default: 1)
     
     Returns:
         Turtle-formatted RDF graph showing the entity and its immediate connections
@@ -370,7 +369,7 @@ def describe_entity(
 
     # originally were args
     num_hops = 1 # may want to make an arg again, but it just retrieves so much info
-    get_classes = True
+    get_classes = False
     
     # Convert string to URIRef
     if isinstance(entity, str):
@@ -632,7 +631,7 @@ def _timeout_handler(signum, frame):
     raise TimeoutError("SPARQL query timed out after 60 seconds")
 
 @mcp.tool()
-def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
+def sparql_query(query: str, result_length: int = 1) -> Dict[str, Any]:
     """
     Execute custom SPARQL queries for complex questions that other tools cannot answer.
     Only use this for multi-step reasoning, filtering, or complex graph patterns.
@@ -648,7 +647,7 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     
     Args:
         query: SPARQL SELECT query (prefixes will be added automatically)
-        result_length: Maximum results to return (default: 10)
+        result_length: Maximum results to return (default: 1)
     
     Returns:
         Query results with bindings for each variable

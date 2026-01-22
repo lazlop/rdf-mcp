@@ -46,7 +46,7 @@ async def main_async(args):
     print("=" * 80)
     
     # The benchmark will create its own timestamped file
-    await run_benchmark()
+    await run_benchmark(config_path=args.config)
     
     # Find the most recent CSV file in the results directory
     # Check both relative to project root and current directory
@@ -149,12 +149,21 @@ Examples:
   # Run benchmark and compute metrics only
   python scripts/run_benchmark_and_analyze.py
   
+  # Run benchmark with a different config file
+  python scripts/run_benchmark_and_analyze.py --config configs/other-benchmark-config.json
+  
   # Run benchmark, compute metrics, and analyze failures
   python scripts/run_benchmark_and_analyze.py --analyze-failures
   
   # Customize failure analysis parameters
   python scripts/run_benchmark_and_analyze.py --analyze-failures --max-message-chars 8000 --threshold 0.9
         """
+    )
+    
+    parser.add_argument(
+        "--config",
+        default="../configs/benchmark-config.json",
+        help="Path to benchmark configuration file (default: configs/benchmark-config.json)"
     )
     
     parser.add_argument(
