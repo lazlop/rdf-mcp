@@ -249,7 +249,8 @@ class SimpleSparqlAgentMCP:
                             break
                         else:
                             print(f"   -> Query returned no results. Retrying ({i+1}/{self.max_iterations})...")
-                        
+                    if not RUN_UNTIL_RESULTS:
+                        break
                 if messages:
                     self.messages += [str(msg) for msg in messages]
         except Exception as e:

@@ -404,12 +404,29 @@ def describe_entity(
                 subgraph.add((o, RDF.type, class_uri))
     
     return subgraph.serialize(format="turtle")
+
+# @mcp.tool()
+def fuzzy_search_concept(
+    concept: str,
+    limit: int = 10):
+    """
+    Fuzzy search for concepts in the graph that match the given string.
+    
+    Args:
+        concept: The string to search for.
+        limit: The maximum number of results to return.
+    
+    Returns:
+        A list of matching concepts.
+    """
+    pass
+
 @mcp.tool()
 def get_building_summary() -> Dict[str, Any]:
     """
     Gets a summary of the building model to support query generation, including:
     - All classes present and their counts
-    - All relationship types and their counts
+    - All relationships present and their counts
     """
     g = _ensure_graph_loaded()
     
