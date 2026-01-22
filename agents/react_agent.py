@@ -358,7 +358,7 @@ class SimpleSparqlAgentMCP:
         except Exception as e:
             print(f"❌ Query generation/review failed: {e}")
             traceback.print_exc()
-            final_generated_query = ""
+            final_generated_query = os.getenv("LAST_GENERATED_QUERY")
 
         if not final_generated_query:
             if tool_calls_exceeded:

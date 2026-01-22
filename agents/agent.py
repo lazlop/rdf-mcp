@@ -19,6 +19,7 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.usage import UsageLimits, UsageLimitExceeded
 from pydantic_ai.mcp import MCPServerStdio
+from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 from pyparsing import ParseException
 from rdflib import BNode, Graph, Literal, URIRef
 from SPARQLWrapper import JSON, SPARQLWrapper
@@ -36,7 +37,7 @@ from scripts.metrics import (
 
 from scripts.utils import CsvLogger
 
-from agents.kgqa import sparql_query
+from agents.kgqa import sparql_query, mcp
 
 
 # RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
@@ -87,6 +88,7 @@ class SimpleSparqlAgentMCP:
         self.total_tokens = 0
         self.messages = []
         self.max_iterations = max_iterations
+        self.toolset = FastMCPToolset(mcp)
 
         # Load API credentials
         if api_key:
@@ -98,7 +100,7 @@ class SimpleSparqlAgentMCP:
                 config = yaml.safe_load(file)
                 self.api_key = config.get('key', api_key)
                 self.base_url = config.get('base_url', base_url)
-                self.mcp_server_script = config.get('mcp_server_script', mcp_server_script)
+                # self.mcp_server_script = config.get('mcp_server_script', mcp_server_script)
         else:
             self.api_key = api_key or os.getenv('OPENAI_API_KEY')
             self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
@@ -124,30 +126,30 @@ class SimpleSparqlAgentMCP:
         # Pass graph_file as environment variable to MCP server
         os.environ['GRAPH_FILE'] = self.sparql_endpoint_url
         os.environ['PARSED_GRAPH_FILE'] = self.parsed_graph_file
-        mcp_env = os.environ.copy()          
-        mcp_server_args = [
-            "run", self.mcp_server_script,
-        ]
-        
-        # ADD env parameter
-        self.mcp_server = MCPServerStdio(
-            "uv", 
-            args=mcp_server_args,
-            env=mcp_env 
-        )
-
         # Set up the model
         self.model = OpenAIModel(
             model_name=self.model_name,
             provider=OpenAIProvider(base_url=self.base_url, api_key=self.api_key),
         )
 
-        self.limits = UsageLimits(total_tokens_limit = 50000, request_limit = 30)
+        self.limits = UsageLimits(total_tokens_limit = 150000, request_limit = 20)
+
+        recommended_tool_calls = self.max_tool_calls // 3
+        system_prompt = (
+            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223. \n"
+            f"Generate a complete SPARQL SELECT query to answer the user's question. \n"
+            f"Use the provided MCP tools to generate the query."
+            f"Begin by calling the get_building_summary. "
+            f"SELECT ALL RELEVANT DATA FROM IN THE QUERY, INCLUDING INFORMATION USED FOR FILTERING THE ANSWER.\n"
+            f"ONCE YOU HAVE GENERATED A SUCCESSFUL QUERY, PROVIDE YOUR FINAL ANSWER.\n"
+            # f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
+        )
+
         self.agent = Agent(
             self.model,
-            result_type=SparqlQuery,
-            mcp_servers=[self.mcp_server],
-            usage_limits=self.limits,
+            output_type=SparqlQuery,
+            toolsets = [self.toolset],
+            system_prompt=system_prompt,
             retries=3
         )
         print('✅ SimpleSparqlAgentMCP initialized successfully.')
@@ -197,83 +199,77 @@ class SimpleSparqlAgentMCP:
     ) -> None:
         """Generate and evaluate a SPARQL query."""
         self.prompt_tokens = self.completion_tokens = self.total_tokens = 0
-        nl_question = eval_data['question']
-        ground_truth_sparql = eval_data.get('ground_truth_sparql')
-
-        print(f"\n🚀 Generating query for: '{nl_question}'")
-        recommended_tool_calls = self.max_tool_calls // 2
-        system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223. \n"
-            f"Generate a complete SPARQL SELECT query to answer the user's question. \n"
-            # f"Use the provided MCP tools to generate the query."
-            # f"Begin by calling the get_building_summary. "
-            f"SELECT ALL RELEVANT DATA FROM IN THE QUERY, INCLUDING INFORMATION USED FOR FILTERING THE ANSWER.\n"
-            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
-        )
-
-        user_message = f"Question: {nl_question}"
         
         generated_query = ""
         tool_calls_exceeded = False
         actual_tool_calls = 0
         
+        nl_question = eval_data['question']
+        ground_truth_sparql = eval_data.get('ground_truth_sparql')
+
+        print(f"\n🚀 Generating query for: '{nl_question}'")
+
+        user_message = f"Question: {nl_question}"
         try:
             self.all_previous_messages = []
+            message_history = []
             for i in range(self.max_iterations):
                 iteration_tool_calls = 0
                 with capture_run_messages() as messages:
-                    async with self.agent.run_mcp_servers():
-                        async def _run_agent():
-                            print('running agent...')
-                            return await self.agent.run(
-                                user_message,
-                                message_history=[],
-                                system_prompt=system_prompt
-                            )
-                        result = await self._exponential_backoff(_run_agent)
-                        
-                        # track tokens
-                        if hasattr(result, 'usage'):
-                            usage = result.usage()
-                            if usage:
-                                self.prompt_tokens += usage.request_tokens
-                                self.completion_tokens += usage.response_tokens
-                                self.total_tokens += usage.total_tokens
-                        
-                        for msg in messages:
-                            if hasattr(msg, 'parts'):
-                                for part in msg.parts:
-                                    # Check if this part is a tool call
-                                    if hasattr(part, 'part_kind') and part.part_kind == 'tool-call':
-                                        iteration_tool_calls += 1
-                                    # Alternative: check the type name
-                                    elif type(part).__name__ == 'ToolCallPart':
-                                        iteration_tool_calls += 1
-                        actual_tool_calls += iteration_tool_calls
-                        
-                        # Check if tool calls exceeded limit
-                        if actual_tool_calls > self.max_tool_calls:
-                            tool_calls_exceeded = True
-                            print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
-                            generated_query = ""
-                        else:
-                            generated_query = result.data.sparql_query
-                            print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
-                        query_results = sparql_query(generated_query, result_length = -1)
-                        self.all_previous_messages += [str(msg) for msg in messages]
-                        if query_results and query_results['row_count'] > 0:
-                            print(f"   -> Query returned {query_results['row_count']} results.")
-                            break
-                        else:
-                            print(f"   -> Query returned no results. Check each element of the query and try again ({i+1}/{self.max_iterations})...")
-                            # self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
-                            messages = [f"Query failed to return results. Write a simpler query and use available tools to double check that the query will return results: : {json.dumps(query_results)}"]
-                    if not RUN_UNTIL_RESULTS:
+                    async def _run_agent(message_history=message_history):
+                        return await self.agent.run(
+                            user_message,
+                            message_history=message_history,
+                            usage_limits=self.limits, 
+                        )
+                    # result = await self._exponential_backoff(_run_agent)
+                    result = await _run_agent()
+                    # track tokens
+                    if hasattr(result, 'usage'):
+                        usage = result.usage()
+                        if usage:
+                            self.prompt_tokens += usage.input_tokens
+                            self.completion_tokens += usage.output_tokens
+                            self.total_tokens += usage.total_tokens
+                    
+                    for msg in messages:
+                        if hasattr(msg, 'parts'):
+                            for part in msg.parts:
+                                # Check if this part is a tool call
+                                if hasattr(part, 'part_kind') and part.part_kind == 'tool-call':
+                                    iteration_tool_calls += 1
+                                # Alternative: check the type name
+                                elif type(part).__name__ == 'ToolCallPart':
+                                    iteration_tool_calls += 1
+                    actual_tool_calls += iteration_tool_calls
+                    
+                    # Check if tool calls exceeded limit
+                    if actual_tool_calls > self.max_tool_calls:
+                        tool_calls_exceeded = True
+                        print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
+                        generated_query = ""
+                    else:
+                        print(result)
+                        print()
+                        print(result.output)
+                        generated_query = result.output.sparql_query
+                        print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
+                    query_results = sparql_query(generated_query, result_length = 10)
+                    self.all_previous_messages += [str(msg) for msg in messages]
+                    if query_results and query_results['row_count'] > 0:
+                        print(f"   -> Query returned {query_results['row_count']} results.")
                         break
+                    else:
+                        print(f"   -> Query returned no results. Check each element of the query and try again ({i+1}/{self.max_iterations})...")
+                        # self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
+                        message_history = [f"Query failed to return results. Write a simpler query and use available tools to double check that the query will return results: : {json.dumps(query_results)}"]
+                if not RUN_UNTIL_RESULTS:
+                    break
         except Exception as e:
             print(f"❌ Query generation failed: {e}")
+            self.all_previous_messages += [str(msg) for msg in messages]
             traceback.print_exc()
-            generated_query = ""
+            generated_query = os.getenv("LAST_GENERATED_QUERY")
 
         if not generated_query:
             if tool_calls_exceeded:
@@ -317,6 +313,7 @@ class SimpleSparqlAgentMCP:
         if ground_truth_sparql:
             gt_results_obj = sparql_query(ground_truth_sparql, result_length = -1)        
         # Calculate metrics
+        print("Calculating evaluation metrics...")
         arity_f1, entity_set_f1, row_matching_f1, exact_match_f1, best_subset_column_f1 = 0.0, 0.0, 0.0, 0.0, 0.0
         less_columns_flag = False
         
