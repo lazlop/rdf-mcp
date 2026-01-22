@@ -343,17 +343,26 @@ def _format_term(term) -> Dict[str, Any]:
 @mcp.tool()
 def describe_entity(
     entity: str | URIRef,
+    num_hops: int = 1
 ) -> str:
     """
-    Describe an entity by extracting its local subgraph. 
-    Local subgraph can be used to identify the correct relationships between entities and their types.
+    Get detailed information about a specific entity including all its properties, 
+    relationships, and type information. Use this when you need to understand what 
+    an entity is, what properties it has, or how it connects to other entities.
+    
+    When to use:
+    - After finding an entity URI and needing to see its complete details
+    - To understand an entity's relationships before answering questions about it
+    - To correct identifiers in a SPARQL query after it fails
     
     Args:
-        entity: The URI of the entity to describe.
+        entity: The full URI of the entity
+        num_hops: The number of hops to traverse from the entity (default: 1)
     
     Returns:
-        A string containing the local subgraph of the entity.
+        Turtle-formatted RDF graph showing the entity and its immediate connections
     """
+
     g = _ensure_graph_loaded() 
 
     # originally were args
@@ -424,9 +433,16 @@ def fuzzy_search_concept(
 @mcp.tool()
 def get_building_summary() -> Dict[str, Any]:
     """
-    Gets a summary of the building model to support query generation, including:
-    - All classes present and their counts
-    - All relationships present and their counts
+    Get an overview of what types of entities and relationships exist in the building model.
+    USE THIS FIRST when starting to work with an unfamiliar building model or dataset.
+    
+    When to use:
+    - At the start of a conversation to understand what data is available
+    - Before writing SPARQL queries to know valid class and property names
+    - To check if certain types of entities exist in the model
+    
+    Returns:
+        Counts of all entity types (classes) and relationship types (predicates) in the model
     """
     g = _ensure_graph_loaded()
     
@@ -484,20 +500,25 @@ def get_building_summary() -> Dict[str, Any]:
     }
 
 @mcp.tool()
-def find_entities_by_type(klass: str | URIRef, include_subclasses: bool = True) -> Dict[str, Any]:
+def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     """
-    Find all entities of a given class type.
+    Find all entities of a specific type (class). Use this to discover what specific 
+    entities exist in the building model before querying details about them.
+    
+    When to use:
+    - After get_building_summary() to find actual instances of a class
+    - To get entity URIs needed for describe_entity()
+    - Before writing complex SPARQL queries to verify entities exist
     
     Args:
-        klass: The URI of the class to search for.
-        include_subclasses: If True, also returns entities of subclasses (default: True)
+        klass: Full URI of the class 
     
     Returns:
-        List of all matching entities with their URIs and labels (if available)
+        List of matching entities with their URIs and labels
     """
     g = _ensure_graph_loaded()
     class_uri = URIRef(klass)
-    
+    include_subclasses = True # may not want this all the time
     # Check if the class exists in the ontology
     if (class_uri, RDF.type, None) not in ontology and \
        (class_uri, RDFS.subClassOf, None) not in ontology:
@@ -610,7 +631,25 @@ def _timeout_handler(signum, frame):
 @mcp.tool()
 def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     """
-    Executes a SPARQL query and returns first 10 results. 
+    Execute custom SPARQL queries for complex questions that other tools cannot answer.
+    Only use this for multi-step reasoning, filtering, or complex graph patterns.
+    
+    When to use:
+    - Finding entities based on multiple conditions or property values
+    - Questions about paths or indirect relationships between entities
+    - After using simpler tools to understand the data structure
+    
+    When NOT to use:
+    - Simple "list all X" questions → use find_entities_by_type() instead
+    - Getting details about one entity → use describe_entity() instead
+    - Understanding what's in the model → use get_building_summary() instead
+    
+    Args:
+        query: SPARQL SELECT query (prefixes will be added automatically)
+        result_length: Maximum results to return (default: 10)
+    
+    Returns:
+        Query results with bindings for each variable
     """
     # Set alarm for timeout
     signal.signal(signal.SIGALRM, _timeout_handler)
@@ -658,7 +697,7 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     finally:
         signal.alarm(0)
 
-@mcp.tool()
+# @mcp.tool()
 def find_shortest_path(
     start_uri: str,
     end_uri: str

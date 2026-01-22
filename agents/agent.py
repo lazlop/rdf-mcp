@@ -56,7 +56,7 @@ class SimpleSparqlAgentMCP:
         sparql_endpoint: str, # just a graph file for now
         model_name: str = "lbl/cborg-coder",
         max_tool_calls: int = 20,
-        max_iterations: int = 10,
+        max_iterations: int = 3,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
@@ -200,9 +200,10 @@ class SimpleSparqlAgentMCP:
         
         system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
-            f"Generate a complete SPARQL query to answer the user's question. "
+            f"Generate a complete SPARQL SELECT query to answer the user's question. "
             f"Use the provided MCP tools to generate the query."
             f"Begin by calling the get_building_summary. "
+            f"IF THE USER QUESTION MENTIONS SOMETHING IN THE SEMANTIC MODEL, THEN IT MUST BE RETRIEVED IN THE QUERY."
             # f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
         )
 
@@ -214,6 +215,7 @@ class SimpleSparqlAgentMCP:
         
         try:
             for i in range(self.max_iterations):
+                iteration_tool_calls = 0
                 with capture_run_messages() as messages:
                     async with self.agent.run_mcp_servers():
                         async def _run_agent():
@@ -232,8 +234,16 @@ class SimpleSparqlAgentMCP:
                                 self.completion_tokens += usage.response_tokens
                                 self.total_tokens += usage.total_tokens
                         
-                        # Count tool calls from messages
-                        actual_tool_calls = sum(1 for msg in messages if hasattr(msg, 'kind') and msg.kind == 'request-tool')
+                        for msg in messages:
+                            if hasattr(msg, 'parts'):
+                                for part in msg.parts:
+                                    # Check if this part is a tool call
+                                    if hasattr(part, 'part_kind') and part.part_kind == 'tool-call':
+                                        iteration_tool_calls += 1
+                                    # Alternative: check the type name
+                                    elif type(part).__name__ == 'ToolCallPart':
+                                        iteration_tool_calls += 1
+                        actual_tool_calls += iteration_tool_calls
                         
                         # Check if tool calls exceeded limit
                         if actual_tool_calls > self.max_tool_calls:
@@ -249,6 +259,7 @@ class SimpleSparqlAgentMCP:
                             break
                         else:
                             print(f"   -> Query returned no results. Retrying ({i+1}/{self.max_iterations})...")
+                            self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
                     if not RUN_UNTIL_RESULTS:
                         break
                 if messages:

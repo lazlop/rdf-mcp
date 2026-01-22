@@ -35,7 +35,8 @@ RESULTS_DIR = Path(config.get("results-dir", "../results"))
 
 # Directory paths
 BENCHMARK_DIR = Path(config.get("buildingqa-dir")) / "Benchmark_QA_pairs"
-EVAL_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "eval_buildings"
+# EVAL_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "eval_buildings"
+EVAL_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "bschema" / "without-ontology"
 
 # Standard prefixes for SPARQL queries
 STANDARD_PREFIXES = """
