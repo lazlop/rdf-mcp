@@ -443,10 +443,20 @@ def get_building_summary() -> Dict[str, Any]:
     - Before writing SPARQL queries to know valid class names
     - To check if certain types of entities exist in the model
     
+    Args:
+        percentile: Filter to show only classes and relationships above this percentile 
+                   of frequency (0.0 to 1.0). Default 0.0 shows all. For example, 
+                   0.5 shows only the top 50% most frequent items.
+    
     Returns:
-        Counts of all entity types (classes)
+        Frequent entity types (classes), relationships, and literals
     """
     g, parsed_graph = _ensure_graph_loaded()
+    
+    percentile = 0.75
+    # Validate percentile
+    if not 0.0 <= percentile <= 1.0:
+        percentile = 0.0
     
     # Count entities by class using SPARQL
     class_query = """
@@ -486,20 +496,74 @@ def get_building_summary() -> Dict[str, Any]:
         pred_name = pred_str        
         relationship_counts[pred_name] = int(row['count'])
     
-    # summary = (
-    #     f"Building model contains {len(g)} total triples, "
-    #     f"{len(class_counts)} distinct classes, "
-    #     f"and {len(relationship_counts)} distinct relationship types."
-    # )
+    # Count literals by predicate and datatype using SPARQL
+    literal_query = """
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    
+    SELECT ?predicate ?datatype (COUNT(*) as ?count)
+    WHERE {
+        ?subject ?predicate ?object .
+        FILTER(isLiteral(?object))
+        BIND(DATATYPE(?object) AS ?datatype)
+    }
+    GROUP BY ?predicate ?datatype
+    ORDER BY DESC(?count)
+    """
+    
+    literal_counts = {}
+    for row in g.query(literal_query):
+        pred_str = str(row.predicate)
+        datatype_str = str(row.datatype) if row.datatype else "plain"
+        key = f"{pred_str} ({datatype_str})"
+        literal_counts[key] = int(row['count'])
+    
+    # Apply percentile filtering if requested
+    if percentile > 0.0:
+        # Filter classes by percentile
+        if class_counts:
+            class_values = sorted(class_counts.values())
+            percentile_index = int(len(class_values) * percentile)
+            class_threshold = class_values[percentile_index] if percentile_index < len(class_values) else 0
+            class_counts = {k: v for k, v in class_counts.items() if v >= class_threshold}
+        
+        # Filter relationships by percentile
+        if relationship_counts:
+            rel_values = sorted(relationship_counts.values())
+            percentile_index = int(len(rel_values) * percentile)
+            rel_threshold = rel_values[percentile_index] if percentile_index < len(rel_values) else 0
+            relationship_counts = {k: v for k, v in relationship_counts.items() if v >= rel_threshold}
+        
+        # Filter literals by percentile
+        if literal_counts:
+            lit_values = sorted(literal_counts.values())
+            percentile_index = int(len(lit_values) * percentile)
+            lit_threshold = lit_values[percentile_index] if percentile_index < len(lit_values) else 0
+            literal_counts = {k: v for k, v in literal_counts.items() if v >= lit_threshold}
     
     return {
-        # "summary": summary,
-        # "total_triples": len(g),
-        "class_counts": class_counts,
-        "relationship_counts": relationship_counts,
-        # "total_classes": len(class_counts),
-        # "total_relationship_types": len(relationship_counts)
+        "classes": [k for k in class_counts.keys()],
+        "relationships": [k for k in relationship_counts.keys()],
+        "literals": [k for k in literal_counts.keys()]
     }
+
+def add_limit_to_sparql(query: str, limit: int = 200) -> str:
+    """Add LIMIT clause to a SPARQL query string."""
+    query = query.strip()
+    
+    # Remove trailing semicolon if present
+    if query.endswith(';'):
+        query = query[:-1].strip()
+    
+    # Check if LIMIT already exists (case-insensitive)
+    if 'LIMIT' in query.upper():
+        # Replace existing LIMIT
+        import re
+        query = re.sub(r'\bLIMIT\s+\d+\b', f'LIMIT {limit}', query, flags=re.IGNORECASE)
+    else:
+        # Add new LIMIT
+        query = f"{query}\nLIMIT {limit}"
+    
+    return query
 
 @mcp.tool()
 def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
@@ -657,6 +721,10 @@ def sparql_query(query: str, result_length: int = 1) -> Dict[str, Any]:
     signal.alarm(60)  # 60 seconds timeout
     try:
         print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
+        if result_length > 1:
+            query = add_limit_to_sparql(query, limit=result_length)
+        else:
+            query = add_limit_to_sparql(query, limit=10000)
         g, parsed_graph = _ensure_graph_loaded()
         prefixes = get_prefixes(parsed_graph)
         full_query = prefixes + "\n" + query
