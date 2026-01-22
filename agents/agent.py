@@ -155,7 +155,7 @@ class SimpleSparqlAgentMCP:
     # -------------------------------------------------------------------------
     # Exponential backoff helper
     # -------------------------------------------------------------------------
-    async def _exponential_backoff(self, coro, *args, delays: List[int] = [5*60, 15*60, 30*60]):
+    async def _exponential_backoff(self, coro, *args, delays: List[int] = [0, 30, 60, 5*60, 15*60, 30*60]):
         """
         Retry an async callable with exponential backoff.
 
