@@ -126,8 +126,7 @@ class SimpleSparqlAgentMCP:
         os.environ['PARSED_GRAPH_FILE'] = self.parsed_graph_file
         mcp_env = os.environ.copy()          
         mcp_server_args = [
-            "run", "--with", "mcp[cli]", "--with", "rdflib", 
-            "--with", "oxrdflib", "mcp", "run", self.mcp_server_script,
+            "run", self.mcp_server_script,
         ]
         
         # ADD env parameter
@@ -151,6 +150,7 @@ class SimpleSparqlAgentMCP:
             usage_limits=self.limits,
             retries=3
         )
+        print('✅ SimpleSparqlAgentMCP initialized successfully.')
 
     # -------------------------------------------------------------------------
     # Exponential backoff helper
@@ -224,6 +224,7 @@ class SimpleSparqlAgentMCP:
                 with capture_run_messages() as messages:
                     async with self.agent.run_mcp_servers():
                         async def _run_agent():
+                            print('running agent...')
                             return await self.agent.run(
                                 user_message,
                                 message_history=[],
