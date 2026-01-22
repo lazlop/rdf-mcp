@@ -38,6 +38,7 @@ def _is_excluded_predicate(pred: URIRef) -> bool:
     return any(pred_str.startswith(ns) for ns in EXCLUDED_NAMESPACES)
 
 # ontology can be brick or 223 
+print("Loading ontology graphs...")
 ontology_brick = Graph(store = "Oxigraph").parse("https://brickschema.org/schema/1.4/Brick.ttl")
 ontology_s223 = Graph(store = "Oxigraph").parse("https://open223.info/223p.ttl")
 ontology = ontology_brick + ontology_s223
@@ -46,6 +47,7 @@ graph = None
 
 def _ensure_graph_loaded():
     """Lazy load the graph from GRAPH_FILE environment variable"""
+    print("loading graph...")
     global graph
     global parsed_graph
     if graph is None:

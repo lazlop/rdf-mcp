@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK
 
 mcp = FastMCP("GraphDemo", dependencies=["rdflib", "oxrdflib"])
+print("loaded mcp")
 
 # Define namespaces to exclude from shortest path search
 QUDT = Namespace("http://qudt.org/schema/qudt/")
@@ -41,11 +42,13 @@ def _is_excluded_predicate(pred: URIRef) -> bool:
 ontology_brick = Graph(store = "Oxigraph").parse("https://brickschema.org/schema/1.4/Brick.ttl")
 ontology_s223 = Graph(store = "Oxigraph").parse("https://open223.info/223p.ttl")
 ontology = ontology_brick + ontology_s223
+print('loaded_ontologies')
 
 graph = None
-
+parsed_graph = None
 def _ensure_graph_loaded():
     """Lazy load the graph from GRAPH_FILE environment variable"""
+    print("loading graph...")
     global graph
     global parsed_graph
     if graph is None:
@@ -747,483 +750,483 @@ def sparql_query(query: str, result_length: int = 3) -> Dict[str, Any]:
     finally:
         signal.alarm(0)
 
-@mcp.tool()
-def get_relationship_between_classes(
-    start_class_uri: str,
-    end_class_uri: str
-) -> Dict[str, Any]:
-    """
-    Find the shortest path between instances of two classes in the graph.
-    The path starts from an instance of start_class (via inverse rdf:type) and 
-    ends at an instance of end_class (via rdf:type).
+# @mcp.tool()
+# def get_relationship_between_classes(
+#     start_class_uri: str,
+#     end_class_uri: str
+# ) -> Dict[str, Any]:
+#     """
+#     Find the shortest path between instances of two classes in the graph.
+#     The path starts from an instance of start_class (via inverse rdf:type) and 
+#     ends at an instance of end_class (via rdf:type).
 
-    When to use:
-    - Finding the relationship between two types of entities
-    - Questions about paths or indirect relationships between entities
+#     When to use:
+#     - Finding the relationship between two types of entities
+#     - Questions about paths or indirect relationships between entities
     
-    Args:
-        start_class_uri: The URI of the starting class
-        end_class_uri: The URI of the ending class
+#     Args:
+#         start_class_uri: The URI of the starting class
+#         end_class_uri: The URI of the ending class
     
-    Returns:
-        Dictionary containing the shortest path information including:
-        - path: List of nodes in the path (class -> instance -> ... -> instance -> class)
-        - predicates: List of predicates connecting the nodes
-        - length: Length of the path
-        - found: Whether a path was found
-    """
-    g, parsed_graph = _ensure_graph_loaded()
+#     Returns:
+#         Dictionary containing the shortest path information including:
+#         - path: List of nodes in the path (class -> instance -> ... -> instance -> class)
+#         - predicates: List of predicates connecting the nodes
+#         - length: Length of the path
+#         - found: Whether a path was found
+#     """
+#     g, parsed_graph = _ensure_graph_loaded()
 
-    max_depth: int = 7
+#     max_depth: int = 7
     
-    # Convert strings to URIRefs
-    start_class = URIRef(start_class_uri)
-    end_class = URIRef(end_class_uri)
+#     # Convert strings to URIRefs
+#     start_class = URIRef(start_class_uri)
+#     end_class = URIRef(end_class_uri)
     
-    # Get all instances of the start class
-    start_instances = list(g.subjects(RDF.type, start_class))
-    if not start_instances:
-        return {
-            "summary": f"No instances found for start class: {start_class_uri}",
-            "found": False,
-            "path": [],
-            "predicates": [],
-            "length": 0,
-            "error": "no_start_instances"
-        }
+#     # Get all instances of the start class
+#     start_instances = list(g.subjects(RDF.type, start_class))
+#     if not start_instances:
+#         return {
+#             "summary": f"No instances found for start class: {start_class_uri}",
+#             "found": False,
+#             "path": [],
+#             "predicates": [],
+#             "length": 0,
+#             "error": "no_start_instances"
+#         }
     
-    # Get all instances of the end class
-    end_instances = set(g.subjects(RDF.type, end_class))
-    if not end_instances:
-        return {
-            "summary": f"No instances found for end class: {end_class_uri}",
-            "found": False,
-            "path": [],
-            "predicates": [],
-            "length": 0,
-            "error": "no_end_instances"
-        }
+#     # Get all instances of the end class
+#     end_instances = set(g.subjects(RDF.type, end_class))
+#     if not end_instances:
+#         return {
+#             "summary": f"No instances found for end class: {end_class_uri}",
+#             "found": False,
+#             "path": [],
+#             "predicates": [],
+#             "length": 0,
+#             "error": "no_end_instances"
+#         }
     
-    # Check if any instance belongs to both classes
-    common_instances = set(start_instances) & end_instances
-    if common_instances:
-        instance = list(common_instances)[0]
-        return {
-            "summary": f"Found common instance of both classes",
-            "found": True,
-            "path": [str(start_class), str(instance), str(end_class)],
-            "predicates": ["^rdf:type", "rdf:type"],
-            "length": 2
-        }
+#     # Check if any instance belongs to both classes
+#     common_instances = set(start_instances) & end_instances
+#     if common_instances:
+#         instance = list(common_instances)[0]
+#         return {
+#             "summary": f"Found common instance of both classes",
+#             "found": True,
+#             "path": [str(start_class), str(instance), str(end_class)],
+#             "predicates": ["^rdf:type", "rdf:type"],
+#             "length": 2
+#         }
     
-    # Find shortest path from any start instance to any end instance
-    result = _find_instance_to_instance_path(g, start_instances, end_instances, max_depth)
+#     # Find shortest path from any start instance to any end instance
+#     result = _find_instance_to_instance_path(g, start_instances, end_instances, max_depth)
     
-    if result["found"]:
-        # Prepend start class and append end class to the path
-        full_path = [str(start_class)] + result["path"] + [str(end_class)]
-        full_predicates = ["^rdf:type"] + result["predicates"] + ["rdf:type"]
+#     if result["found"]:
+#         # Prepend start class and append end class to the path
+#         full_path = [str(start_class)] + result["path"] + [str(end_class)]
+#         full_predicates = ["^rdf:type"] + result["predicates"] + ["rdf:type"]
         
-        path_str = " -> ".join(full_path)
-        pred_str = " -> ".join(full_predicates)
-        summary = (
-            f"Found path of length {len(full_path) - 1} from {start_class_uri} to {end_class_uri}.\n"
-            f"Path: {path_str}\n"
-            f"Predicates: {pred_str}"
-        )
+#         path_str = " -> ".join(full_path)
+#         pred_str = " -> ".join(full_predicates)
+#         summary = (
+#             f"Found path of length {len(full_path) - 1} from {start_class_uri} to {end_class_uri}.\n"
+#             f"Path: {path_str}\n"
+#             f"Predicates: {pred_str}"
+#         )
         
-        return {
-            "summary": summary,
-            "found": True,
-            "path": full_path,
-            "predicates": full_predicates,
-            "length": len(full_path) - 1
-        }
-    else:
-        summary = f"No path found between instances of {start_class_uri} and {end_class_uri} within {max_depth} hops"
-        return {
-            "summary": summary,
-            "found": False,
-            "path": [],
-            "predicates": [],
-            "length": 0
-        }
+#         return {
+#             "summary": summary,
+#             "found": True,
+#             "path": full_path,
+#             "predicates": full_predicates,
+#             "length": len(full_path) - 1
+#         }
+#     else:
+#         summary = f"No path found between instances of {start_class_uri} and {end_class_uri} within {max_depth} hops"
+#         return {
+#             "summary": summary,
+#             "found": False,
+#             "path": [],
+#             "predicates": [],
+#             "length": 0
+#         }
 
-def _find_instance_to_instance_path(
-    g: Graph,
-    start_instances: List[URIRef],
-    end_instances: set,
-    max_depth: int
-) -> Dict[str, Any]:
-    """
-    Find shortest path from any instance in start_instances to any instance in end_instances.
-    Uses BFS to explore from all start instances simultaneously.
-    """
-    # Queue stores: (current_node, path_nodes, path_predicates)
-    queue = deque()
-    visited = set()
+# def _find_instance_to_instance_path(
+#     g: Graph,
+#     start_instances: List[URIRef],
+#     end_instances: set,
+#     max_depth: int
+# ) -> Dict[str, Any]:
+#     """
+#     Find shortest path from any instance in start_instances to any instance in end_instances.
+#     Uses BFS to explore from all start instances simultaneously.
+#     """
+#     # Queue stores: (current_node, path_nodes, path_predicates)
+#     queue = deque()
+#     visited = set()
     
-    # Initialize queue with all start instances
-    for instance in start_instances:
-        queue.append((instance, [instance], []))
-        visited.add(instance)
+#     # Initialize queue with all start instances
+#     for instance in start_instances:
+#         queue.append((instance, [instance], []))
+#         visited.add(instance)
     
-    while queue:
-        current, path_nodes, path_predicates = queue.popleft()
+#     while queue:
+#         current, path_nodes, path_predicates = queue.popleft()
         
-        # Check if we've exceeded max depth
-        if len(path_nodes) > max_depth:
-            continue
+#         # Check if we've exceeded max depth
+#         if len(path_nodes) > max_depth:
+#             continue
         
-        # Check if current node is an end instance
-        if current in end_instances:
-            return {
-                "found": True,
-                "path": [str(node) for node in path_nodes],
-                "predicates": [str(pred) for pred in path_predicates],
-                "length": len(path_nodes) - 1
-            }
+#         # Check if current node is an end instance
+#         if current in end_instances:
+#             return {
+#                 "found": True,
+#                 "path": [str(node) for node in path_nodes],
+#                 "predicates": [str(pred) for pred in path_predicates],
+#                 "length": len(path_nodes) - 1
+#             }
         
-        # Explore outgoing edges (current as subject)
-        for pred, obj in g.predicate_objects(current):
-            # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
-            if _is_excluded_predicate(pred):
-                continue
-            if isinstance(obj, URIRef):
-                if obj in end_instances:
-                    # Found a target instance
-                    return {
-                        "found": True,
-                        "path": [str(node) for node in path_nodes + [obj]],
-                        "predicates": [str(pred) for pred in path_predicates + [pred]],
-                        "length": len(path_nodes)
-                    }
+#         # Explore outgoing edges (current as subject)
+#         for pred, obj in g.predicate_objects(current):
+#             # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+#             if _is_excluded_predicate(pred):
+#                 continue
+#             if isinstance(obj, URIRef):
+#                 if obj in end_instances:
+#                     # Found a target instance
+#                     return {
+#                         "found": True,
+#                         "path": [str(node) for node in path_nodes + [obj]],
+#                         "predicates": [str(pred) for pred in path_predicates + [pred]],
+#                         "length": len(path_nodes)
+#                     }
                 
-                if obj not in visited:
-                    visited.add(obj)
-                    queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
+#                 if obj not in visited:
+#                     visited.add(obj)
+#                     queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
         
-        # Explore incoming edges (current as object)
-        for subj, pred in g.subject_predicates(current):
-            # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
-            if _is_excluded_predicate(pred):
-                continue
-            if isinstance(subj, URIRef):
-                if subj in end_instances:
-                    # Found a target instance
-                    return {
-                        "found": True,
-                        "path": [str(node) for node in path_nodes + [subj]],
-                        "predicates": [str(pred) for pred in path_predicates + [f"^{pred}"]],
-                        "length": len(path_nodes)
-                    }
+#         # Explore incoming edges (current as object)
+#         for subj, pred in g.subject_predicates(current):
+#             # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
+#             if _is_excluded_predicate(pred):
+#                 continue
+#             if isinstance(subj, URIRef):
+#                 if subj in end_instances:
+#                     # Found a target instance
+#                     return {
+#                         "found": True,
+#                         "path": [str(node) for node in path_nodes + [subj]],
+#                         "predicates": [str(pred) for pred in path_predicates + [f"^{pred}"]],
+#                         "length": len(path_nodes)
+#                     }
                 
-                if subj not in visited:
-                    visited.add(subj)
-                    queue.append((subj, path_nodes + [subj], path_predicates + [f"^{pred}"]))
+#                 if subj not in visited:
+#                     visited.add(subj)
+#                     queue.append((subj, path_nodes + [subj], path_predicates + [f"^{pred}"]))
     
-    return {
-        "found": False,
-        "path": [],
-        "predicates": [],
-        "length": 0
-    }
+#     return {
+#         "found": False,
+#         "path": [],
+#         "predicates": [],
+#         "length": 0
+#     }
 
-from sentence_transformers import SentenceTransformer
-from typing import List, Dict, Any, Optional, Literal as typeLiteral
-from rdflib import Namespace
+# from sentence_transformers import SentenceTransformer
+# from typing import List, Dict, Any, Optional, Literal as typeLiteral
+# from rdflib import Namespace
 
-DEFAULT_EMBEDDING_MODEL = "paraphrase-MiniLM-L3-v2"
+# DEFAULT_EMBEDDING_MODEL = "paraphrase-MiniLM-L3-v2"
 
-# Common namespaces
-RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
-OWL = Namespace("http://www.w3.org/2002/07/owl#")
+# # Common namespaces
+# RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+# RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
+# OWL = Namespace("http://www.w3.org/2002/07/owl#")
 
 
-class GraphURIFinder:
-    """Fuzzy search for classes and predicates in an RDF graph."""
+# class GraphURIFinder:
+#     """Fuzzy search for classes and predicates in an RDF graph."""
     
-    def __init__(self, graph, embedding_model: str = DEFAULT_EMBEDDING_MODEL):
-        """
-        Initialize the URI finder with a graph.
+#     def __init__(self, graph, embedding_model: str = DEFAULT_EMBEDDING_MODEL):
+#         """
+#         Initialize the URI finder with a graph.
         
-        Args:
-            graph: rdflib.Graph instance
-            embedding_model: Name of the sentence transformer model to use
-        """
-        self.graph = graph
-        self.embedding_model = SentenceTransformer(embedding_model)
-        self.metadatas = []
-        self.embeddings = None
-        self._build_index()
+#         Args:
+#             graph: rdflib.Graph instance
+#             embedding_model: Name of the sentence transformer model to use
+#         """
+#         self.graph = graph
+#         self.embedding_model = SentenceTransformer(embedding_model)
+#         self.metadatas = []
+#         self.embeddings = None
+#         self._build_index()
     
-    def _extract_local_name(self, uri: str) -> str:
-        """Extract the local name from a URI."""
-        uri_str = str(uri)
-        if '#' in uri_str:
-            return uri_str.split('#')[-1]
-        elif '/' in uri_str:
-            return uri_str.split('/')[-1]
-        return uri_str
+#     def _extract_local_name(self, uri: str) -> str:
+#         """Extract the local name from a URI."""
+#         uri_str = str(uri)
+#         if '#' in uri_str:
+#             return uri_str.split('#')[-1]
+#         elif '/' in uri_str:
+#             return uri_str.split('/')[-1]
+#         return uri_str
     
-    def _extract_classes(self) -> List[Dict]:
-        """Extract class information from the graph."""
-        query = """
-        SELECT DISTINCT ?klass ?label ?comment
-        WHERE {
-            ?subject a ?klass .
+#     def _extract_classes(self) -> List[Dict]:
+#         """Extract class information from the graph."""
+#         query = """
+#         SELECT DISTINCT ?klass ?label ?comment
+#         WHERE {
+#             ?subject a ?klass .
             
-            OPTIONAL { ?klass rdfs:label ?label }
-            OPTIONAL { ?klass rdfs:comment ?comment }
-        }
-        ORDER BY ?klass
-        """
+#             OPTIONAL { ?klass rdfs:label ?label }
+#             OPTIONAL { ?klass rdfs:comment ?comment }
+#         }
+#         ORDER BY ?klass
+#         """
         
-        classes = []
-        try:
-            results = self.graph.query(query)
+#         classes = []
+#         try:
+#             results = self.graph.query(query)
             
-            for row in results:
-                class_uri = str(row['klass'])
-                label = str(row['label']) if row['label'] else self._extract_local_name(class_uri)
-                comment = str(row['comment']) if row['comment'] else ""
+#             for row in results:
+#                 class_uri = str(row['klass'])
+#                 label = str(row['label']) if row['label'] else self._extract_local_name(class_uri)
+#                 comment = str(row['comment']) if row['comment'] else ""
                 
-                # Get parent classes
-                parents = []
-                for parent in self.graph.objects(row['klass'], RDFS['subClassOf']):
-                    parent_name = self._extract_local_name(str(parent))
-                    if parent_name not in ['Class', 'Resource']:  # Skip generic parents
-                        parents.append(parent_name)
+#                 # Get parent classes
+#                 parents = []
+#                 for parent in self.graph.objects(row['klass'], RDFS['subClassOf']):
+#                     parent_name = self._extract_local_name(str(parent))
+#                     if parent_name not in ['Class', 'Resource']:  # Skip generic parents
+#                         parents.append(parent_name)
                 
-                class_info = {
-                    'uri': class_uri,
-                    'label': label,
-                    'local_name': self._extract_local_name(class_uri),
-                    'comment': comment,
-                    'parents': ', '.join(parents),
-                    'type': 'class'
-                }
-                classes.append(class_info)
+#                 class_info = {
+#                     'uri': class_uri,
+#                     'label': label,
+#                     'local_name': self._extract_local_name(class_uri),
+#                     'comment': comment,
+#                     'parents': ', '.join(parents),
+#                     'type': 'class'
+#                 }
+#                 classes.append(class_info)
                 
-        except Exception as e:
-            print(f"Failed to extract classes: {e}")
-            import traceback
-            traceback.print_exc()
+#         except Exception as e:
+#             print(f"Failed to extract classes: {e}")
+#             import traceback
+#             traceback.print_exc()
             
-        return classes
+#         return classes
     
-    def _extract_predicates(self) -> List[Dict]:
-        """Extract predicate/property information from the graph."""
-        query = """
-        SELECT DISTINCT ?predicate ?label ?comment
-        WHERE {
-            ?predicate a ?type .
-            FILTER(?type IN (rdf:Property, owl:ObjectProperty, owl:DatatypeProperty))
+#     def _extract_predicates(self) -> List[Dict]:
+#         """Extract predicate/property information from the graph."""
+#         query = """
+#         SELECT DISTINCT ?predicate ?label ?comment
+#         WHERE {
+#             ?predicate a ?type .
+#             FILTER(?type IN (rdf:Property, owl:ObjectProperty, owl:DatatypeProperty))
             
-            OPTIONAL { ?predicate rdfs:label ?label }
-            OPTIONAL { ?predicate rdfs:comment ?comment }
-        }
-        ORDER BY ?predicate
-        """
+#             OPTIONAL { ?predicate rdfs:label ?label }
+#             OPTIONAL { ?predicate rdfs:comment ?comment }
+#         }
+#         ORDER BY ?predicate
+#         """
         
-        predicates = []
-        try:
-            results = self.graph.query(query)
+#         predicates = []
+#         try:
+#             results = self.graph.query(query)
             
-            for row in results:
-                pred_uri = str(row['predicate'])
-                label = str(row['label']) if row['label'] else self._extract_local_name(pred_uri)
-                comment = str(row['comment']) if row['comment'] else ""
+#             for row in results:
+#                 pred_uri = str(row['predicate'])
+#                 label = str(row['label']) if row['label'] else self._extract_local_name(pred_uri)
+#                 comment = str(row['comment']) if row['comment'] else ""
                 
-                pred_info = {
-                    'uri': pred_uri,
-                    'label': label,
-                    'local_name': self._extract_local_name(pred_uri),
-                    'comment': comment,
-                    'parents': '',
-                    'type': 'predicate'
-                }
-                predicates.append(pred_info)
+#                 pred_info = {
+#                     'uri': pred_uri,
+#                     'label': label,
+#                     'local_name': self._extract_local_name(pred_uri),
+#                     'comment': comment,
+#                     'parents': '',
+#                     'type': 'predicate'
+#                 }
+#                 predicates.append(pred_info)
                 
-        except Exception as e:
-            print(f"Failed to extract predicates: {e}")
-            import traceback
-            traceback.print_exc()
+#         except Exception as e:
+#             print(f"Failed to extract predicates: {e}")
+#             import traceback
+#             traceback.print_exc()
             
-        return predicates
+#         return predicates
     
-    def _build_index(self):
-        """Build the search index from the graph."""
-        # Extract classes and predicates
-        classes = self._extract_classes()
-        predicates = self._extract_predicates()
-        items = classes + predicates
+#     def _build_index(self):
+#         """Build the search index from the graph."""
+#         # Extract classes and predicates
+#         classes = self._extract_classes()
+#         predicates = self._extract_predicates()
+#         items = classes + predicates
         
-        if not items:
-            print("No classes or predicates found in graph")
-            return
+#         if not items:
+#             print("No classes or predicates found in graph")
+#             return
         
-        # Build searchable documents
-        documents = []
-        self.metadatas = []
+#         # Build searchable documents
+#         documents = []
+#         self.metadatas = []
         
-        for item in items:
-            # Create searchable text
-            searchable_parts = [
-                item['local_name'],
-                item['label'],
-                item['comment'],
-                item['parents']
-            ]
-            searchable_text = ' '.join(filter(None, searchable_parts))
+#         for item in items:
+#             # Create searchable text
+#             searchable_parts = [
+#                 item['local_name'],
+#                 item['label'],
+#                 item['comment'],
+#                 item['parents']
+#             ]
+#             searchable_text = ' '.join(filter(None, searchable_parts))
             
-            documents.append(searchable_text)
-            self.metadatas.append(item)
+#             documents.append(searchable_text)
+#             self.metadatas.append(item)
         
-        # Generate embeddings
-        if documents:
-            self.embeddings = self.embedding_model.encode(documents)
-            print(f"Indexed {len(documents)} items ({len(classes)} classes, {len(predicates)} predicates)")
+#         # Generate embeddings
+#         if documents:
+#             self.embeddings = self.embedding_model.encode(documents)
+#             print(f"Indexed {len(documents)} items ({len(classes)} classes, {len(predicates)} predicates)")
     
-    def find_similar(
-        self, 
-        query: str, 
-        search_type: typeLiteral["both", "class", "predicate"] = "both",
-        n_results: int = 5
-    ) -> List[Dict]:
-        """
-        Find URIs similar to the given query string.
+#     def find_similar(
+#         self, 
+#         query: str, 
+#         search_type: typeLiteral["both", "class", "predicate"] = "both",
+#         n_results: int = 5
+#     ) -> List[Dict]:
+#         """
+#         Find URIs similar to the given query string.
         
-        Args:
-            query: Search query string
-            search_type: What to search for - "both", "classes", or "predicates"
-            n_results: Number of results to return
+#         Args:
+#             query: Search query string
+#             search_type: What to search for - "both", "classes", or "predicates"
+#             n_results: Number of results to return
             
-        Returns:
-            List of dictionaries containing similar URIs and metadata
-        """
-        if self.embeddings is None or len(self.metadatas) == 0:
-            return []
-        try:
-            # Filter by type if requested
-            if search_type == "both":
-                filtered_embeddings = self.embeddings
-                filtered_indices = list(range(len(self.metadatas)))
-            else:
-                filtered_indices = [
-                    i for i, meta in enumerate(self.metadatas)
-                    if meta['type'] == search_type  # "class" or "predicate"
-                ]
+#         Returns:
+#             List of dictionaries containing similar URIs and metadata
+#         """
+#         if self.embeddings is None or len(self.metadatas) == 0:
+#             return []
+#         try:
+#             # Filter by type if requested
+#             if search_type == "both":
+#                 filtered_embeddings = self.embeddings
+#                 filtered_indices = list(range(len(self.metadatas)))
+#             else:
+#                 filtered_indices = [
+#                     i for i, meta in enumerate(self.metadatas)
+#                     if meta['type'] == search_type  # "class" or "predicate"
+#                 ]
 
-                if not filtered_indices:
-                    return []
-                filtered_embeddings = self.embeddings[filtered_indices]
+#                 if not filtered_indices:
+#                     return []
+#                 filtered_embeddings = self.embeddings[filtered_indices]
             
-            # Compute similarity
-            query_embedding = self.embedding_model.encode(query)
-            similarities = self.embedding_model.similarity(
-                filtered_embeddings, 
-                query_embedding
-            ).squeeze(1)
-            # Get top k results
-            n_results = min(n_results, len(filtered_indices))
-            topk_indices = similarities.topk(n_results).indices.tolist()
+#             # Compute similarity
+#             query_embedding = self.embedding_model.encode(query)
+#             similarities = self.embedding_model.similarity(
+#                 filtered_embeddings, 
+#                 query_embedding
+#             ).squeeze(1)
+#             # Get top k results
+#             n_results = min(n_results, len(filtered_indices))
+#             topk_indices = similarities.topk(n_results).indices.tolist()
 
-            # Convert topk_indices to integers if they're strings
-            topk_indices = [int(i) if isinstance(i, str) else i for i in topk_indices]
-            # Map back to original indices and return matching metadata
-            original_indices = [filtered_indices[i] for i in topk_indices]
-            # Convert original_indices to integers if they're strings
-            original_indices = [int(i) for i in original_indices]
-            matches = [self.metadatas[i] for i in original_indices]
+#             # Convert topk_indices to integers if they're strings
+#             topk_indices = [int(i) if isinstance(i, str) else i for i in topk_indices]
+#             # Map back to original indices and return matching metadata
+#             original_indices = [filtered_indices[i] for i in topk_indices]
+#             # Convert original_indices to integers if they're strings
+#             original_indices = [int(i) for i in original_indices]
+#             matches = [self.metadatas[i] for i in original_indices]
 
-            return matches
+#             return matches
             
-        except Exception as e:
-            print(f"Failed to find similar URIs: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+#         except Exception as e:
+#             print(f"Failed to find similar URIs: {e}")
+#             import traceback
+#             traceback.print_exc()
+#             return []
 
 
-# Global URI finder instance
-_uri_finder: Optional[GraphURIFinder] = None
+# # Global URI finder instance
+# _uri_finder: Optional[GraphURIFinder] = None
 
-def _ensure_uri_finder_loaded():
-    """
-    Ensure the URI finder is loaded and initialized with the current graph.
-    Rebuilds the index if the graph has changed.
+# def _ensure_uri_finder_loaded():
+#     """
+#     Ensure the URI finder is loaded and initialized with the current graph.
+#     Rebuilds the index if the graph has changed.
     
-    Returns:
-        Initialized GraphURIFinder instance
-    """
-    global _uri_finder
+#     Returns:
+#         Initialized GraphURIFinder instance
+#     """
+#     global _uri_finder
     
-    g, parsed_graph = _ensure_graph_loaded()
+#     g, parsed_graph = _ensure_graph_loaded()
     
-    # Rebuild if graph changed or not yet initialized
-    if _uri_finder is None or _uri_finder.graph != g:
-        print("Building fuzzy search index from graph...")
-        _uri_finder = GraphURIFinder(g)
+#     # Rebuild if graph changed or not yet initialized
+#     if _uri_finder is None or _uri_finder.graph != g:
+#         print("Building fuzzy search index from graph...")
+#         _uri_finder = GraphURIFinder(g)
     
-    return _uri_finder
+#     return _uri_finder
 
-@mcp.tool()
-def fuzzy_search_concept(
-    query: str,
-    search_type: typeLiteral["both", "classes", "predicates"] = "both",
-    n_results: int = 5
-) -> Dict[str, Any]:
-    """
-    Find classes or predicates that match the search query using semantic similarity.
+# @mcp.tool()
+# def fuzzy_search_concept(
+#     query: str,
+#     search_type: typeLiteral["both", "classes", "predicates"] = "both",
+#     n_results: int = 5
+# ) -> Dict[str, Any]:
+#     """
+#     Find classes or predicates that match the search query using semantic similarity.
     
-    When to use:
-    - When you know the concept but not the exact class or property name
-    - Before writing SPARQL queries to find the correct URIs to use
+#     When to use:
+#     - When you know the concept but not the exact class or property name
+#     - Before writing SPARQL queries to find the correct URIs to use
     
-    Args:
-        query: Natural language description or partial name to search for
-        search_type: What to search for:
-                    - "both": Search both classes and predicates (default)
-                    - "classes": Search only classes
-                    - "predicates": Search only predicates
-        n_results: Number of similar results to return (default: 5)
+#     Args:
+#         query: Natural language description or partial name to search for
+#         search_type: What to search for:
+#                     - "both": Search both classes and predicates (default)
+#                     - "classes": Search only classes
+#                     - "predicates": Search only predicates
+#         n_results: Number of similar results to return (default: 5)
     
-    Returns:
-        Dictionary containing:
-        - matches: List of matching items with uri, label, comment, type (class/predicate)
+#     Returns:
+#         Dictionary containing:
+#         - matches: List of matching items with uri, label, comment, type (class/predicate)
 
-    """
-    finder = _ensure_uri_finder_loaded()
+#     """
+#     finder = _ensure_uri_finder_loaded()
     
-        # Validate search_type
-    if search_type == "classes":
-        search_type = "class"
-    elif search_type == "predicates":
-        search_type = "predicate"
+#         # Validate search_type
+#     if search_type == "classes":
+#         search_type = "class"
+#     elif search_type == "predicates":
+#         search_type = "predicate"
 
-    if search_type not in ["both", "class", "predicate"]:
-        return {
-            "error": f"Invalid search_type '{search_type}'. Must be 'both', 'classes', or 'predicates'",
-        }
+#     if search_type not in ["both", "class", "predicate"]:
+#         return {
+#             "error": f"Invalid search_type '{search_type}'. Must be 'both', 'classes', or 'predicates'",
+#         }
     
-    try:
-        finder = _ensure_uri_finder_loaded()
+#     try:
+#         finder = _ensure_uri_finder_loaded()
         
-        matches = finder.find_similar(
-            query=query, 
-            search_type=search_type,
-            n_results=n_results
-        )
-        match_uri_list = [dct['uri'] for dct in matches]
-        return {
-            "matches": match_uri_list,
-        }
+#         matches = finder.find_similar(
+#             query=query, 
+#             search_type=search_type,
+#             n_results=n_results
+#         )
+#         match_uri_list = [dct['uri'] for dct in matches]
+#         return {
+#             "matches": match_uri_list,
+#         }
         
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {
-            "error": f"Search failed: {str(e)}",
-        }
+#     except Exception as e:
+#         import traceback
+#         traceback.print_exc()
+#         return {
+#             "error": f"Search failed: {str(e)}",
+#         }
