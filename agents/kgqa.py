@@ -342,8 +342,7 @@ def _format_term(term) -> Dict[str, Any]:
 
 @mcp.tool()
 def describe_entity(
-    entity: str | URIRef,
-    num_hops: int = 1
+    entity: str | URIRef
 ) -> str:
     """
     Get detailed information about a specific entity including all its properties, 
@@ -352,7 +351,6 @@ def describe_entity(
     
     When to use:
     - After finding an entity URI and needing to see its complete details
-    - To understand an entity's relationships before answering questions about it
     - To correct identifiers in a SPARQL query after it fails
     
     Args:
@@ -366,7 +364,7 @@ def describe_entity(
     g = _ensure_graph_loaded() 
 
     # originally were args
-    num_hops = 1
+    num_hops = 1 # may want to make an arg again, but it just retrieves so much info
     get_classes = True
     
     # Convert string to URIRef
@@ -438,11 +436,11 @@ def get_building_summary() -> Dict[str, Any]:
     
     When to use:
     - At the start of a conversation to understand what data is available
-    - Before writing SPARQL queries to know valid class and property names
+    - Before writing SPARQL queries to know valid class names
     - To check if certain types of entities exist in the model
     
     Returns:
-        Counts of all entity types (classes) and relationship types (predicates) in the model
+        Counts of all entity types (classes)
     """
     g = _ensure_graph_loaded()
     
@@ -635,9 +633,8 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     Only use this for multi-step reasoning, filtering, or complex graph patterns.
     
     When to use:
-    - Finding entities based on multiple conditions or property values
-    - Questions about paths or indirect relationships between entities
-    - After using simpler tools to understand the data structure
+    - After using simpler tools to better understand complex topologies
+    - After using simpler tools to identify specific elements of information needed for a query
     
     When NOT to use:
     - Simple "list all X" questions → use find_entities_by_type() instead
@@ -697,21 +694,27 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     finally:
         signal.alarm(0)
 
-# @mcp.tool()
-def find_shortest_path(
-    start_uri: str,
-    end_uri: str
+@mcp.tool()
+def get_relationship_between_classes(
+    start_class_uri: str,
+    end_class_uri: str
 ) -> Dict[str, Any]:
     """
-    Find the shortest path of predicates between two entities in the graph.
+    Find the shortest path between instances of two classes in the graph.
+    The path starts from an instance of start_class (via inverse rdf:type) and 
+    ends at an instance of end_class (via rdf:type).
+
+    When to use:
+    - Finding the relationship between two types of entities
+    - Questions about paths or indirect relationships between entities
     
     Args:
-        start_uri: The starting URI
-        end_uri: The ending URI
+        start_class_uri: The URI of the starting class
+        end_class_uri: The URI of the ending class
     
     Returns:
         Dictionary containing the shortest path information including:
-        - path: List of nodes in the path
+        - path: List of nodes in the path (class -> instance -> ... -> instance -> class)
         - predicates: List of predicates connecting the nodes
         - length: Length of the path
         - found: Whether a path was found
@@ -719,77 +722,98 @@ def find_shortest_path(
     g = _ensure_graph_loaded()
 
     max_depth: int = 7
-    bidirectional: bool = True
     
     # Convert strings to URIRefs
-    start = URIRef(start_uri)
-    end = URIRef(end_uri)
+    start_class = URIRef(start_class_uri)
+    end_class = URIRef(end_class_uri)
     
-    # Validate that both URIs exist in the graph
-    start_exists = any(g.triples((start, None, None))) or any(g.triples((None, None, start)))
-    end_exists = any(g.triples((end, None, None))) or any(g.triples((None, None, end)))
-    
-    if not start_exists:
+    # Get all instances of the start class
+    start_instances = list(g.subjects(RDF.type, start_class))
+    if not start_instances:
         return {
-            "summary": f"Start URI not found in graph: {start_uri}",
+            "summary": f"No instances found for start class: {start_class_uri}",
             "found": False,
             "path": [],
             "predicates": [],
             "length": 0,
-            "error": "start_uri_not_found"
+            "error": "no_start_instances"
         }
     
-    if not end_exists:
+    # Get all instances of the end class
+    end_instances = set(g.subjects(RDF.type, end_class))
+    if not end_instances:
         return {
-            "summary": f"End URI not found in graph: {end_uri}",
+            "summary": f"No instances found for end class: {end_class_uri}",
             "found": False,
             "path": [],
             "predicates": [],
             "length": 0,
-            "error": "end_uri_not_found"
+            "error": "no_end_instances"
         }
     
-    # Check if start and end are the same
-    if start == end:
+    # Check if any instance belongs to both classes
+    common_instances = set(start_instances) & end_instances
+    if common_instances:
+        instance = list(common_instances)[0]
         return {
-            "summary": f"Start and end URIs are identical",
+            "summary": f"Found common instance of both classes",
             "found": True,
-            "path": [str(start)],
-            "predicates": [],
-            "length": 0
+            "path": [str(start_class), str(instance), str(end_class)],
+            "predicates": ["^rdf:type", "rdf:type"],
+            "length": 2
         }
     
-    if bidirectional:
-        result = _bidirectional_bfs(g, start, end, max_depth)
-    else:
-        result = _unidirectional_bfs(g, start, end, max_depth)
+    # Find shortest path from any start instance to any end instance
+    result = _find_instance_to_instance_path(g, start_instances, end_instances, max_depth)
     
     if result["found"]:
-        path_str = " -> ".join([f"{node}" for node in result["path"]])
-        pred_str = " -> ".join([f"{pred}" for pred in result["predicates"]])
+        # Prepend start class and append end class to the path
+        full_path = [str(start_class)] + result["path"] + [str(end_class)]
+        full_predicates = ["^rdf:type"] + result["predicates"] + ["rdf:type"]
+        
+        path_str = " -> ".join(full_path)
+        pred_str = " -> ".join(full_predicates)
         summary = (
-            f"Found path of length {result['length']} from {start_uri} to {end_uri}.\n"
+            f"Found path of length {len(full_path) - 1} from {start_class_uri} to {end_class_uri}.\n"
             f"Path: {path_str}\n"
             f"Predicates: {pred_str}"
         )
+        
+        return {
+            "summary": summary,
+            "found": True,
+            "path": full_path,
+            "predicates": full_predicates,
+            "length": len(full_path) - 1
+        }
     else:
-        summary = f"No path found between {start_uri} and {end_uri} within {max_depth} hops"
-    
-    result["summary"] = summary
-    return result
+        summary = f"No path found between instances of {start_class_uri} and {end_class_uri} within {max_depth} hops"
+        return {
+            "summary": summary,
+            "found": False,
+            "path": [],
+            "predicates": [],
+            "length": 0
+        }
 
-def _unidirectional_bfs(
+def _find_instance_to_instance_path(
     g: Graph,
-    start: URIRef,
-    end: URIRef,
+    start_instances: List[URIRef],
+    end_instances: set,
     max_depth: int
 ) -> Dict[str, Any]:
     """
-    Perform unidirectional BFS to find shortest path.
+    Find shortest path from any instance in start_instances to any instance in end_instances.
+    Uses BFS to explore from all start instances simultaneously.
     """
     # Queue stores: (current_node, path_nodes, path_predicates)
-    queue = deque([(start, [start], [])])
-    visited = {start}
+    queue = deque()
+    visited = set()
+    
+    # Initialize queue with all start instances
+    for instance in start_instances:
+        queue.append((instance, [instance], []))
+        visited.add(instance)
     
     while queue:
         current, path_nodes, path_predicates = queue.popleft()
@@ -798,20 +822,28 @@ def _unidirectional_bfs(
         if len(path_nodes) > max_depth:
             continue
         
+        # Check if current node is an end instance
+        if current in end_instances:
+            return {
+                "found": True,
+                "path": [str(node) for node in path_nodes],
+                "predicates": [str(pred) for pred in path_predicates],
+                "length": len(path_nodes) - 1
+            }
+        
         # Explore outgoing edges (current as subject)
         for pred, obj in g.predicate_objects(current):
             # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
             if _is_excluded_predicate(pred):
                 continue
             if isinstance(obj, URIRef):
-                if obj == end:
-                    # Found the target
+                if obj in end_instances:
+                    # Found a target instance
                     return {
                         "found": True,
                         "path": [str(node) for node in path_nodes + [obj]],
                         "predicates": [str(pred) for pred in path_predicates + [pred]],
-                        "length": len(path_nodes),
-                        "direction": "forward"
+                        "length": len(path_nodes)
                     }
                 
                 if obj not in visited:
@@ -824,19 +856,18 @@ def _unidirectional_bfs(
             if _is_excluded_predicate(pred):
                 continue
             if isinstance(subj, URIRef):
-                if subj == end:
-                    # Found the target
+                if subj in end_instances:
+                    # Found a target instance
                     return {
                         "found": True,
                         "path": [str(node) for node in path_nodes + [subj]],
-                        "predicates": [str(pred) for pred in path_predicates + [pred]],
-                        "length": len(path_nodes),
-                        "direction": "backward"
+                        "predicates": [str(pred) for pred in path_predicates + [f"^{pred}"]],
+                        "length": len(path_nodes)
                     }
                 
                 if subj not in visited:
                     visited.add(subj)
-                    queue.append((subj, path_nodes + [subj], path_predicates + [pred]))
+                    queue.append((subj, path_nodes + [subj], path_predicates + [f"^{pred}"]))
     
     return {
         "found": False,

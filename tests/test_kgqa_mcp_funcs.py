@@ -17,7 +17,7 @@ from agents.kgqa import (
     sparql_query,
     get_building_summary,
     find_entities_by_type,
-    find_shortest_path,
+    get_relationship_between_classes,
     _ensure_graph_loaded
 )
 
@@ -76,21 +76,18 @@ def test_find_entities_by_type():
         try:
             result = find_entities_by_type(brick_class, include_subclasses=True)
             print(f"\n🔍 Searching for '{brick_class}':")
-            print(f"   {result['summary']}")
-            
-            if result['count'] > 0:
-                print(f"   First 3 entities:")
-                for entity in result['entities'][:3]:
-                    label = entity.get('label', 'No label')
-                    print(f"   - {label} ({entity['class']})")
-                    print(f"     URI: {entity['uri']}")
+            print(f"   First 3 entities:")
+            for entity in result['entities'][:3]:
+                label = entity.get('label', 'No label')
+                print(f"   - {label} ({entity['class']})")
+                print(f"     URI: {entity['uri']}")
         except Exception as e:
             print(f"❌ Failed for {brick_class}: {e}")
     
     # Test without subclasses
     print("\n🔍 Testing without subclasses (Equipment only):")
     try:
-        result = find_entities_by_type("Equipment", include_subclasses=False)
+        result = find_entities_by_type(BRICK["Equipment"])
         print(f"   {result['summary']}")
     except Exception as e:
         print(f"❌ Failed: {e}")
@@ -101,19 +98,23 @@ def test_entity_info():
     
     # First, find an entity to query
     try:
-        result = find_entities_by_type("VAV", include_subclasses=True)
-        if result['count'] > 0:
-            entity_uri = result['entities'][0]['uri']
-            print(f"📍 Testing with entity: {entity_uri}")
-            
-            # Get 1-hop info
-            info = describe_entity(entity_uri, num_hops=1, get_classes=True)
-            print(f"✅ Retrieved entity info (1 hop)")
-            print(f"   Turtle output length: {len(info)} characters")
-            print(f"\n   First 500 characters:")
-            print(f"   {info[:500]}...")
-        else:
-            print("⚠️  No VAV entities found to test with")
+        result = find_entities_by_type(BRICK["VAV"])
+        entity_uri = result['entities'][0]['uri']
+        print(f"📍 Testing with entity: {entity_uri}")
+        
+        # Get 1-hop info
+        info = describe_entity(entity_uri, num_hops=1)
+        print(f"✅ Retrieved entity info (1 hop)")
+        print(f"   Turtle output length: {len(info)} characters")
+        print(f"\n   First 500 characters:")
+        print(f"   {info[:500]}...")
+        print(info)
+        print('with 2 hops:')
+        info = describe_entity(entity_uri, num_hops=2)
+        print(f"✅ Retrieved entity info (2 hops)")
+        print(f"   Turtle output length: {len(info)} characters")
+        print(f"\n   First 500 characters:")
+        print(f"   {info[:500]}...")
     except Exception as e:
         print(f"❌ Failed: {e}")
         import traceback
@@ -172,13 +173,13 @@ def test_sparql_query():
 def test_shortest_path():
     """Test 6: Find shortest path between entities"""
     print_section("TEST 6: Shortest Path Finding")
-    entity1_uri = URIRef("http://buildsys.org/ontologies/bldg11#VAVRM0101")
-    entity2_uri = URIRef("http://buildsys.org/ontologies/bldg11#bldg11.ZONE.AHU09.RM0101.VLV_2_COMD")
+    entity1_uri = BRICK['VAV']
+    entity2_uri = BRICK['Valve_Command']
     # First, find two entities to test with
     try:
         # Test 1: Bidirectional search
         print("\n🔍 Test 1: Bidirectional BFS")
-        path_result = find_shortest_path(entity1_uri, entity2_uri)
+        path_result = get_relationship_between_classes(entity1_uri, entity2_uri)
         print(f"   {path_result['summary']}")
         if path_result['found']:
             print(f"   Path length: {path_result['length']}")
@@ -192,14 +193,14 @@ def test_shortest_path():
         
         # Test 2: Unidirectional search
         print("\n🔍 Test 2: Unidirectional BFS")
-        path_result = find_shortest_path(entity1_uri, entity2_uri)
+        path_result = get_relationship_between_classes(entity1_uri, entity2_uri)
         print(f"   {path_result['summary']}")
         if path_result['found']:
             print(f"   Path length: {path_result['length']}")
         
         # Test 3: Same start and end
         print("\n🔍 Test 3: Same start and end URI")
-        path_result = find_shortest_path(entity1_uri, entity1_uri)
+        path_result = get_relationship_between_classes(entity1_uri, entity1_uri)
         print(f"   {path_result['summary']}")
         print(f"   Found: {path_result['found']}, Length: {path_result['length']}")
             

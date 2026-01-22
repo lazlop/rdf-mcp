@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, capture_run_messages
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.usage import UsageLimits, UsageLimitExceeded
 from pydantic_ai.mcp import MCPServerStdio
 from pyparsing import ParseException
 from rdflib import BNode, Graph, Literal, URIRef
@@ -54,8 +55,9 @@ class SimpleSparqlAgentMCP:
     def __init__(
         self, 
         sparql_endpoint: str, # just a graph file for now
+        parsed_graph_file: str,
         model_name: str = "lbl/cborg-coder",
-        max_tool_calls: int = 20,
+        max_tool_calls: int = 10,
         max_iterations: int = 3,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
@@ -119,6 +121,7 @@ class SimpleSparqlAgentMCP:
 
         # Pass graph_file as environment variable to MCP server
         os.environ['GRAPH_FILE'] = self.sparql_endpoint_url
+        os.environ['PARSED_GRAPH_FILE'] = self.sparql_endpoint_url
         mcp_env = os.environ.copy()          
         mcp_server_args = [
             "run", "--with", "mcp[cli]", "--with", "rdflib", 
@@ -197,13 +200,13 @@ class SimpleSparqlAgentMCP:
 
         print(f"\n🚀 Generating query for: '{nl_question}'")
         recommended_tool_calls = self.max_tool_calls // 2
-        
+        limits = UsageLimits(max_tokens = 150000)  # High limit to avoid interruptions
         system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
-            f"Generate a complete SPARQL SELECT query to answer the user's question. "
-            f"Use the provided MCP tools to generate the query."
-            f"Begin by calling the get_building_summary. "
-            f"IF THE USER QUESTION MENTIONS SOMETHING IN THE SEMANTIC MODEL, THEN IT MUST BE RETRIEVED IN THE QUERY."
+            f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223. \n"
+            f"Generate a complete SPARQL SELECT query to answer the user's question. \n"
+            # f"Use the provided MCP tools to generate the query."
+            # f"Begin by calling the get_building_summary. "
+            f"SELECT ALL RELEVANT DATA FROM IN THE QUERY, INCLUDING INFORMATION USED FOR FILTERING THE ANSWER.\n"
             # f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
         )
 
@@ -258,8 +261,9 @@ class SimpleSparqlAgentMCP:
                             print(f"   -> Query returned {query_results['row_count']} results.")
                             break
                         else:
-                            print(f"   -> Query returned no results. Retrying ({i+1}/{self.max_iterations})...")
-                            self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
+                            print(f"   -> Query returned no results. Please write a simpler query using the available tools to ensure the query matches the graph and will return results ({i+1}/{self.max_iterations})...")
+                            # self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
+                            self.messages = [f"Query failed to return results. Write a simpler query and use available tools to double check that the query will return results: {json.dumps(query_results)}"]
                     if not RUN_UNTIL_RESULTS:
                         break
                 if messages:
