@@ -416,22 +416,6 @@ def describe_entity(
     
     return subgraph.serialize(format="turtle")
 
-# @mcp.tool()
-def fuzzy_search_concept(
-    concept: str,
-    limit: int = 10):
-    """
-    Fuzzy search for concepts in the graph that match the given string.
-    
-    Args:
-        concept: The string to search for.
-        limit: The maximum number of results to return.
-    
-    Returns:
-        A list of matching concepts.
-    """
-    pass
-
 @mcp.tool()
 def get_building_summary() -> Dict[str, Any]:
     """
@@ -447,8 +431,10 @@ def get_building_summary() -> Dict[str, Any]:
         Frequent entity types (classes), relationships, and literals
     """
     g, parsed_graph = _ensure_graph_loaded()
-    
-    percentile = 0.50  # Exclude bottom 50%
+
+    # switching to taking top 50 of each 
+    top_n = 50
+    percentile = 0  # Exclude bottom 50%
     # Validate percentile
     if not 0.0 <= percentile <= 1.0:
         percentile = 0.0
@@ -536,12 +522,12 @@ def get_building_summary() -> Dict[str, Any]:
             literal_counts = {k: v for k, v in literal_counts.items() if v > lit_threshold}
     
     return {
-        "classes": [k for k in class_counts.keys()],
-        "relationships": [k for k in relationship_counts.keys()],
-        "literals": [k for k in literal_counts.keys()]
+        "classes": [k for k in class_counts.keys()][:top_n],
+        "relationships": [k for k in relationship_counts.keys()][:top_n],
+        "literals": [k for k in literal_counts.keys()][:top_n]
     }
 
-def add_limit_to_sparql(query: str, limit: int = 200) -> str:
+def add_limit_to_sparql(query: str, limit: int = 1000) -> str:
     """Add LIMIT clause to a SPARQL query string."""
     query = query.strip()
     
@@ -943,3 +929,301 @@ def _find_instance_to_instance_path(
         "length": 0
     }
 
+from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Any, Optional, Literal as typeLiteral
+from rdflib import Namespace
+
+DEFAULT_EMBEDDING_MODEL = "paraphrase-MiniLM-L3-v2"
+
+# Common namespaces
+RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#")
+OWL = Namespace("http://www.w3.org/2002/07/owl#")
+
+
+class GraphURIFinder:
+    """Fuzzy search for classes and predicates in an RDF graph."""
+    
+    def __init__(self, graph, embedding_model: str = DEFAULT_EMBEDDING_MODEL):
+        """
+        Initialize the URI finder with a graph.
+        
+        Args:
+            graph: rdflib.Graph instance
+            embedding_model: Name of the sentence transformer model to use
+        """
+        self.graph = graph
+        self.embedding_model = SentenceTransformer(embedding_model)
+        self.metadatas = []
+        self.embeddings = None
+        self._build_index()
+    
+    def _extract_local_name(self, uri: str) -> str:
+        """Extract the local name from a URI."""
+        uri_str = str(uri)
+        if '#' in uri_str:
+            return uri_str.split('#')[-1]
+        elif '/' in uri_str:
+            return uri_str.split('/')[-1]
+        return uri_str
+    
+    def _extract_classes(self) -> List[Dict]:
+        """Extract class information from the graph."""
+        query = """
+        SELECT DISTINCT ?klass ?label ?comment
+        WHERE {
+            ?subject a ?klass .
+            
+            OPTIONAL { ?klass rdfs:label ?label }
+            OPTIONAL { ?klass rdfs:comment ?comment }
+        }
+        ORDER BY ?klass
+        """
+        
+        classes = []
+        try:
+            results = self.graph.query(query)
+            
+            for row in results:
+                class_uri = str(row['klass'])
+                label = str(row['label']) if row['label'] else self._extract_local_name(class_uri)
+                comment = str(row['comment']) if row['comment'] else ""
+                
+                # Get parent classes
+                parents = []
+                for parent in self.graph.objects(row['klass'], RDFS['subClassOf']):
+                    parent_name = self._extract_local_name(str(parent))
+                    if parent_name not in ['Class', 'Resource']:  # Skip generic parents
+                        parents.append(parent_name)
+                
+                class_info = {
+                    'uri': class_uri,
+                    'label': label,
+                    'local_name': self._extract_local_name(class_uri),
+                    'comment': comment,
+                    'parents': ', '.join(parents),
+                    'type': 'class'
+                }
+                classes.append(class_info)
+                
+        except Exception as e:
+            print(f"Failed to extract classes: {e}")
+            import traceback
+            traceback.print_exc()
+            
+        return classes
+    
+    def _extract_predicates(self) -> List[Dict]:
+        """Extract predicate/property information from the graph."""
+        query = """
+        SELECT DISTINCT ?predicate ?label ?comment
+        WHERE {
+            ?predicate a ?type .
+            FILTER(?type IN (rdf:Property, owl:ObjectProperty, owl:DatatypeProperty))
+            
+            OPTIONAL { ?predicate rdfs:label ?label }
+            OPTIONAL { ?predicate rdfs:comment ?comment }
+        }
+        ORDER BY ?predicate
+        """
+        
+        predicates = []
+        try:
+            results = self.graph.query(query)
+            
+            for row in results:
+                pred_uri = str(row['predicate'])
+                label = str(row['label']) if row['label'] else self._extract_local_name(pred_uri)
+                comment = str(row['comment']) if row['comment'] else ""
+                
+                pred_info = {
+                    'uri': pred_uri,
+                    'label': label,
+                    'local_name': self._extract_local_name(pred_uri),
+                    'comment': comment,
+                    'parents': '',
+                    'type': 'predicate'
+                }
+                predicates.append(pred_info)
+                
+        except Exception as e:
+            print(f"Failed to extract predicates: {e}")
+            import traceback
+            traceback.print_exc()
+            
+        return predicates
+    
+    def _build_index(self):
+        """Build the search index from the graph."""
+        # Extract classes and predicates
+        classes = self._extract_classes()
+        predicates = self._extract_predicates()
+        items = classes + predicates
+        
+        if not items:
+            print("No classes or predicates found in graph")
+            return
+        
+        # Build searchable documents
+        documents = []
+        self.metadatas = []
+        
+        for item in items:
+            # Create searchable text
+            searchable_parts = [
+                item['local_name'],
+                item['label'],
+                item['comment'],
+                item['parents']
+            ]
+            searchable_text = ' '.join(filter(None, searchable_parts))
+            
+            documents.append(searchable_text)
+            self.metadatas.append(item)
+        
+        # Generate embeddings
+        if documents:
+            self.embeddings = self.embedding_model.encode(documents)
+            print(f"Indexed {len(documents)} items ({len(classes)} classes, {len(predicates)} predicates)")
+    
+    def find_similar(
+        self, 
+        query: str, 
+        search_type: typeLiteral["both", "class", "predicate"] = "both",
+        n_results: int = 5
+    ) -> List[Dict]:
+        """
+        Find URIs similar to the given query string.
+        
+        Args:
+            query: Search query string
+            search_type: What to search for - "both", "classes", or "predicates"
+            n_results: Number of results to return
+            
+        Returns:
+            List of dictionaries containing similar URIs and metadata
+        """
+        if self.embeddings is None or len(self.metadatas) == 0:
+            return []
+        try:
+            # Filter by type if requested
+            if search_type == "both":
+                filtered_embeddings = self.embeddings
+                filtered_indices = list(range(len(self.metadatas)))
+            else:
+                filtered_indices = [
+                    i for i, meta in enumerate(self.metadatas)
+                    if meta['type'] == search_type  # "class" or "predicate"
+                ]
+
+                if not filtered_indices:
+                    return []
+                filtered_embeddings = self.embeddings[filtered_indices]
+            
+            # Compute similarity
+            query_embedding = self.embedding_model.encode(query)
+            similarities = self.embedding_model.similarity(
+                filtered_embeddings, 
+                query_embedding
+            ).squeeze(1)
+            # Get top k results
+            n_results = min(n_results, len(filtered_indices))
+            topk_indices = similarities.topk(n_results).indices.tolist()
+
+            # Convert topk_indices to integers if they're strings
+            topk_indices = [int(i) if isinstance(i, str) else i for i in topk_indices]
+            # Map back to original indices and return matching metadata
+            original_indices = [filtered_indices[i] for i in topk_indices]
+            # Convert original_indices to integers if they're strings
+            original_indices = [int(i) for i in original_indices]
+            matches = [self.metadatas[i] for i in original_indices]
+
+            return matches
+            
+        except Exception as e:
+            print(f"Failed to find similar URIs: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+
+# Global URI finder instance
+_uri_finder: Optional[GraphURIFinder] = None
+
+def _ensure_uri_finder_loaded():
+    """
+    Ensure the URI finder is loaded and initialized with the current graph.
+    Rebuilds the index if the graph has changed.
+    
+    Returns:
+        Initialized GraphURIFinder instance
+    """
+    global _uri_finder
+    
+    g, parsed_graph = _ensure_graph_loaded()
+    
+    # Rebuild if graph changed or not yet initialized
+    if _uri_finder is None or _uri_finder.graph != g:
+        print("Building fuzzy search index from graph...")
+        _uri_finder = GraphURIFinder(g)
+    
+    return _uri_finder
+
+@mcp.tool()
+def fuzzy_search_concept(
+    query: str,
+    search_type: typeLiteral["both", "classes", "predicates"] = "both",
+    n_results: int = 5
+) -> Dict[str, Any]:
+    """
+    Find classes or predicates that match the search query using semantic similarity.
+    
+    When to use:
+    - When you know the concept but not the exact class or property name
+    - Before writing SPARQL queries to find the correct URIs to use
+    
+    Args:
+        query: Natural language description or partial name to search for
+        search_type: What to search for:
+                    - "both": Search both classes and predicates (default)
+                    - "classes": Search only classes
+                    - "predicates": Search only predicates
+        n_results: Number of similar results to return (default: 5)
+    
+    Returns:
+        Dictionary containing:
+        - matches: List of matching items with uri, label, comment, type (class/predicate)
+
+    """
+    finder = _ensure_uri_finder_loaded()
+    
+        # Validate search_type
+    if search_type == "classes":
+        search_type = "class"
+    elif search_type == "predicates":
+        search_type = "predicate"
+
+    if search_type not in ["both", "class", "predicate"]:
+        return {
+            "error": f"Invalid search_type '{search_type}'. Must be 'both', 'classes', or 'predicates'",
+        }
+    
+    try:
+        finder = _ensure_uri_finder_loaded()
+        
+        matches = finder.find_similar(
+            query=query, 
+            search_type=search_type,
+            n_results=n_results
+        )
+        match_uri_list = [dct['uri'] for dct in matches]
+        return {
+            "matches": match_uri_list,
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "error": f"Search failed: {str(e)}",
+        }

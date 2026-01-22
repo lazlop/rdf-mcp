@@ -39,7 +39,8 @@ from scripts.utils import CsvLogger
 from agents.kgqa import sparql_query
 
 
-RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
+# RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
+RUN_UNTIL_RESULTS = False  
 
 class SparqlQuery(BaseModel):
     """Model for the agent's output."""
@@ -57,7 +58,7 @@ class SimpleSparqlAgentMCP:
         sparql_endpoint: str, # just a graph file for now
         parsed_graph_file: str,
         model_name: str = "lbl/cborg-coder",
-        max_tool_calls: int = 50,
+        max_tool_calls: int = 30,
         max_iterations: int = 3,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
@@ -207,7 +208,7 @@ class SimpleSparqlAgentMCP:
             # f"Use the provided MCP tools to generate the query."
             # f"Begin by calling the get_building_summary. "
             f"SELECT ALL RELEVANT DATA FROM IN THE QUERY, INCLUDING INFORMATION USED FOR FILTERING THE ANSWER.\n"
-            # f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
+            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
         )
 
         user_message = f"Question: {nl_question}"

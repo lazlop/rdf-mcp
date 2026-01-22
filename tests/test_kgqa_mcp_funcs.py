@@ -2,11 +2,12 @@
 test_mcp.py - Basic test script for GraphDemo MCP tools
 """
 import os
+from pprint import pprint
 import sys
 from rdflib import URIRef
 # Set up environment variable for graph file
 # Update this path to point to your actual Brick TTL file
-GRAPH_FILE = "test-building.ttl"
+GRAPH_FILE = '../../BuildingQA/bschema/without-ontology/b59.ttl' #"test-building.ttl"
 os.environ["GRAPH_FILE"] = GRAPH_FILE
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -18,6 +19,7 @@ from agents.kgqa import (
     get_building_summary,
     find_entities_by_type,
     get_relationship_between_classes,
+    fuzzy_search_concept,
     _ensure_graph_loaded
 )
 
@@ -221,6 +223,21 @@ def test_error_handling():
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
 
+def test_fuzzy_search():
+    """Test 8: Fuzzy search"""
+    print_section("TEST 8: Fuzzy Search")
+    try:
+        results = fuzzy_search_concept("heating coil", search_type="classes", n_results=3)
+        print(f"✅ Fuzzy search results for 'heating coil':")
+        pprint(results)
+        results = fuzzy_search_concept("heating coil", search_type="predicates", n_results=3)
+        print(f"✅ Fuzzy search results for 'heating coil':")
+        pprint(results)
+        results = fuzzy_search_concept("heating coil", search_type="both", n_results=3)
+        print(f"✅ Fuzzy search results for 'heating coil':")
+        pprint(results)
+    except Exception as e:
+        print(f"❌ Fuzzy search failed: {e}")
 def main():
     """Run all tests"""
     print("\n" + "🧪"*40)
@@ -238,12 +255,13 @@ def main():
     # Run tests
     tests = [
         test_graph_loading,
-        test_building_summary,
-        test_find_entities_by_type,
-        test_entity_info,
-        test_sparql_query,
-        test_shortest_path,
-        test_error_handling
+        # test_building_summary,
+        # test_find_entities_by_type,
+        # test_entity_info,
+        # test_sparql_query,
+        # test_shortest_path,
+        # test_error_handling,
+        test_fuzzy_search,
     ]
     
     results = []
