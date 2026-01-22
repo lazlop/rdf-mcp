@@ -1,0 +1,82 @@
+query_id,question_number,source,question,model,message_history,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,best_subset_column_f1,less_columns_flag,tool_calls_exceeded,actual_tool_calls,max_tool_calls,prompt_tokens,completion_tokens,total_tokens
+LBNL_001,,,"Identify each entity that is a zone, and either has a directly associated property or is indirectly connected to a property via a RoomDomainSpace through a chain of connections.",lbl/cborg-coder,,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX ss223: <http://data.ashrae.org/standard223#>
+PREFIX ex: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+
+SELECT DISTINCT ?zone WHERE {
+  ?zone a ss223:Zone .
+  {
+    # Direct association with a property
+    ?zone ss223:hasProperty ?prop .
+  } UNION {
+    # Indirect association via any path to a RoomDomainSpace that has a property
+    ?zone (ss223:hasDomainSpace|ss223:connected|ss223:connectedTo|ss223:connectedThrough|ss223:connectsThrough|ss223:connectsTo|ss223:connectsFrom)* ?space .
+    ?space a ss223:RoomDomainSpace .
+    ?space ss223:hasProperty ?prop .
+  }
+}",True,True,False,0,4,50,1,0.4,0.0,0.0,0.0,0.0,True,False,2,20,8688,1474,10162
+LBNL_001,,,"For each zone (target), what are the related non-writable property labels and ALC and MPC endpoint references?",lbl/cborg-coder,,"PREFIX s223: <http://data.ashrae.org/standard223#>
+PREFIX ex1: <http://data.ashrae.org/standard223/data/lbnl-example-2#>
+PREFIX qudt: <http://qudt.org/schema/qudt/>
+PREFIX ref: <https://brickschema.org/schema/Brick/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX quantitykind: <http://qudt.org/vocab/quantitykind/>
+
+SELECT DISTINCT ?target ?label ?alc_endpoint ?mpc_endpoint WHERE {
+{ ?target a s223:Zone; s223:hasProperty ?prop. }
+UNION
+{ ?target a s223:Zone; s223:hasDomainSpace ?space .
+?space a ex1:RoomDomainSpace ;
+s223:connected/s223:connected/s223:contains/s223:hasProperty ?prop . }
+
+?prop a s223:Property;
+qudt:hasQuantityKind|s223:hasEnumerationKind ?quantKind;
+rdfs:label ?label;
+s223:hasExternalReference ?ref .
+
+?ref ref:endpoint ?alc_endpoint;
+ref:mpc_db_name ?mpc_endpoint;
+ref:writable ""False"" .
+}","PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX brick: <https://brickschema.org/schema/Brick/>
+PREFIX std223: <http://data.ashrae.org/standard223#>
+
+SELECT ?zone ?zoneLabel ?propertyLabel ?endpointReference WHERE {
+  # Zones
+  ?zone a std223:Zone .
+  OPTIONAL { ?zone rdfs:label ?zoneLabel }
+
+  # Properties related to the zone (non‑writable)
+  ?zone std223:hasProperty ?prop .
+  ?prop rdfs:label ?propertyLabel .
+  FILTER NOT EXISTS { ?prop brick:writable true }
+
+  # Endpoint references (ALC or MPC) attached to the property, if any
+  OPTIONAL {
+    ?prop brick:endpoint ?endpointReference .
+    FILTER ( ?endpointReference = ""ALC"" || ?endpointReference = ""MPC"" )
+  }
+}
+ORDER BY ?zone ?propertyLabel",True,True,False,0,4,259,4,1.0,0.0,0.0,0.0,0.0,False,False,2,20,8714,1066,9780

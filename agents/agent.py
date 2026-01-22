@@ -146,6 +146,7 @@ class SimpleSparqlAgentMCP:
             self.model,
             result_type=SparqlQuery,
             mcp_servers=[self.mcp_server],
+            usage_limits=UsageLimits(total_tokens_limit = 100000, request_limit = 30),  # High limit to avoid interruptions
             retries=3
         )
 
@@ -191,7 +192,6 @@ class SimpleSparqlAgentMCP:
         eval_data: Dict[str, Any],
         logger: CsvLogger,
         prefixes: str,
-        knowledge_graph_content: str
     ) -> None:
         """Generate and evaluate a SPARQL query."""
         self.prompt_tokens = self.completion_tokens = self.total_tokens = 0
@@ -200,7 +200,6 @@ class SimpleSparqlAgentMCP:
 
         print(f"\n🚀 Generating query for: '{nl_question}'")
         recommended_tool_calls = self.max_tool_calls // 2
-        limits = UsageLimits(max_tokens = 150000)  # High limit to avoid interruptions
         system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223. \n"
             f"Generate a complete SPARQL SELECT query to answer the user's question. \n"
@@ -364,9 +363,8 @@ def run_agent(
     eval_data: Dict[str, Any],
     logger: CsvLogger,
     prefixes: str,
-    knowledge_graph_content: str,
     **kwargs
 ):
     """Convenience function to run the agent."""
     agent = SimpleSparqlAgentMCP(sparql_endpoint, **kwargs)
-    asyncio.run(agent.generate_query(eval_data, logger, prefixes, knowledge_graph_content))
+    asyncio.run(agent.generate_query(eval_data, logger, prefixes))

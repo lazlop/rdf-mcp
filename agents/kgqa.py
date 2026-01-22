@@ -47,8 +47,10 @@ graph = None
 def _ensure_graph_loaded():
     """Lazy load the graph from GRAPH_FILE environment variable"""
     global graph
+    global parsed_graph
     if graph is None:
         graph_file = os.getenv("GRAPH_FILE")
+        parsed_graph_file = os.getenv("PARSED_GRAPH_FILE")
         if not graph_file:
             # Attempt to fall back to a default test graph if the environment variable is not set
             default_path = os.path.join(os.path.dirname(__file__), "test-building.ttl")
@@ -62,8 +64,11 @@ def _ensure_graph_loaded():
         graph = Graph(store='Oxigraph')
         graph.parse(graph_file)
         bind_prefixes(graph)
+        parsed_graph = Graph(store='Oxigraph')
+        parsed_graph.parse(parsed_graph_file)
+        bind_prefixes(parsed_graph)
         print(f"✅ Loaded graph from {graph_file} ({len(graph)} triples)")
-    return graph
+    return graph, parsed_graph
 
 def _format_term(term) -> Dict[str, Any]:
     """Format an RDF term for JSON serialization"""
@@ -361,7 +366,7 @@ def describe_entity(
         Turtle-formatted RDF graph showing the entity and its immediate connections
     """
 
-    g = _ensure_graph_loaded() 
+    g, parsed_graph = _ensure_graph_loaded() 
 
     # originally were args
     num_hops = 1 # may want to make an arg again, but it just retrieves so much info
@@ -442,7 +447,7 @@ def get_building_summary() -> Dict[str, Any]:
     Returns:
         Counts of all entity types (classes)
     """
-    g = _ensure_graph_loaded()
+    g, parsed_graph = _ensure_graph_loaded()
     
     # Count entities by class using SPARQL
     class_query = """
@@ -514,7 +519,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     Returns:
         List of matching entities with their URIs and labels
     """
-    g = _ensure_graph_loaded()
+    g, parsed_graph = _ensure_graph_loaded()
     class_uri = URIRef(klass)
     include_subclasses = True # may not want this all the time
     # Check if the class exists in the ontology
@@ -653,10 +658,10 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     signal.alarm(60)  # 60 seconds timeout
     try:
         print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
-        g = _ensure_graph_loaded()
-        prefixes = get_prefixes(g)
+        g, parsed_graph = _ensure_graph_loaded()
+        prefixes = get_prefixes(parsed_graph)
         full_query = prefixes + "\n" + query
-        qres = g.query(full_query)
+        qres = parsed_graph.query(full_query)
         formatted_results = _format_rdflib_results(qres)
         bindings = formatted_results["results"][:result_length]
         summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
@@ -719,7 +724,7 @@ def get_relationship_between_classes(
         - length: Length of the path
         - found: Whether a path was found
     """
-    g = _ensure_graph_loaded()
+    g, parsed_graph = _ensure_graph_loaded()
 
     max_depth: int = 7
     

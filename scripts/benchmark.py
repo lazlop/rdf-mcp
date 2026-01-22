@@ -35,7 +35,7 @@ RESULTS_DIR = Path(config.get("results-dir", "../results"))
 
 # Directory paths
 BENCHMARK_DIR = Path(config.get("buildingqa-dir")) / "Benchmark_QA_pairs"
-# EVAL_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "eval_buildings"
+PARSED_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "eval_buildings"
 EVAL_BUILDINGS_DIR = Path(config.get("buildingqa-dir")) / "bschema" / "without-ontology"
 
 # Standard prefixes for SPARQL queries
@@ -64,9 +64,12 @@ def load_json_file(filepath: Path) -> Dict:
 def get_ttl_path(building_id: str) -> Path:
     """Get the corresponding TTL file path for a building ID."""
     ttl_path = EVAL_BUILDINGS_DIR / building_id
+    parsed_ttl_path = PARSED_BUILDINGS_DIR / building_id
     if not ttl_path.exists():
         raise FileNotFoundError(f"TTL file not found: {ttl_path}")
-    return ttl_path
+    if not parsed_ttl_path.exists():
+        raise FileNotFoundError(f"Parsed TTL file not found: {parsed_ttl_path}")
+    return ttl_path, parsed_ttl_path
 
 
 def load_kg_content(ttl_path: Path) -> str:
@@ -103,12 +106,12 @@ async def process_building_queries(
     print("=" * 60)
 
     # Load TTL graph
-    ttl_path = get_ttl_path(building_id)
-    kg_content = load_kg_content(ttl_path)
+    ttl_path, parsed_ttl_path = get_ttl_path(building_id)
 
     # Initialise agent
     agent = SimpleSparqlAgentMCP(
         sparql_endpoint=str(ttl_path),
+        parsed_graph_file=str(parsed_ttl_path),
         model_name=MODEL_NAME,
         max_tool_calls=max_tool_calls,
         api_key=API_KEY,
@@ -152,7 +155,6 @@ async def process_building_queries(
                     eval_data=eval_data,
                     logger=logger,
                     prefixes=STANDARD_PREFIXES,
-                    knowledge_graph_content=kg_content,
                 )
                 print("  ✅ Completed")
             except Exception as e:
