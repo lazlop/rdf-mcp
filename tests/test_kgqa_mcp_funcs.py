@@ -44,14 +44,7 @@ def test_building_summary():
     print_section("TEST 2: Building Summary")
     try:
         result = get_building_summary()
-        print(f"✅ {result['summary']}")
-        print(f"\nTop 10 Classes:")
-        for i, (class_name, count) in enumerate(list(result['class_counts'].items())[:10]):
-            print(f"   {i+1}. {class_name}: {count}")
-        
-        print(f"\nTop 10 Relationships:")
-        for i, (rel_name, count) in enumerate(list(result['relationship_counts'].items())[:10]):
-            print(f"   {i+1}. {rel_name}: {count}")
+        print(f"✅ {result}")
         return True
     except Exception as e:
         print(f"❌ Failed: {e}")
@@ -74,7 +67,7 @@ def test_find_entities_by_type():
     
     for brick_class in test_classes:
         try:
-            result = find_entities_by_type(brick_class, include_subclasses=True)
+            result = find_entities_by_type(brick_class)
             print(f"\n🔍 Searching for '{brick_class}':")
             print(f"   First 3 entities:")
             for entity in result['entities'][:3]:

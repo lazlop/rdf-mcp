@@ -435,7 +435,7 @@ def fuzzy_search_concept(
 @mcp.tool()
 def get_building_summary() -> Dict[str, Any]:
     """
-    Get an overview of what types of entities and relationships exist in the building model.
+    Get an overview of frequent types of entities, literals and relationships exist in the building model.
     USE THIS FIRST when starting to work with an unfamiliar building model or dataset.
     
     When to use:
@@ -443,17 +443,12 @@ def get_building_summary() -> Dict[str, Any]:
     - Before writing SPARQL queries to know valid class names
     - To check if certain types of entities exist in the model
     
-    Args:
-        percentile: Filter to show only classes and relationships above this percentile 
-                   of frequency (0.0 to 1.0). Default 0.0 shows all. For example, 
-                   0.5 shows only the top 50% most frequent items.
-    
     Returns:
         Frequent entity types (classes), relationships, and literals
     """
     g, parsed_graph = _ensure_graph_loaded()
     
-    percentile = 0.75
+    percentile = 0.50  # Exclude bottom 50%
     # Validate percentile
     if not 0.0 <= percentile <= 1.0:
         percentile = 0.0
@@ -500,19 +495,19 @@ def get_building_summary() -> Dict[str, Any]:
     literal_query = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     
-    SELECT ?predicate ?datatype (COUNT(*) as ?count)
+    SELECT ?object ?datatype (COUNT(*) as ?count)
     WHERE {
         ?subject ?predicate ?object .
         FILTER(isLiteral(?object))
         BIND(DATATYPE(?object) AS ?datatype)
     }
-    GROUP BY ?predicate ?datatype
+    GROUP BY ?object ?datatype
     ORDER BY DESC(?count)
     """
     
     literal_counts = {}
     for row in g.query(literal_query):
-        pred_str = str(row.predicate)
+        pred_str = str(row.object)
         datatype_str = str(row.datatype) if row.datatype else "plain"
         key = f"{pred_str} ({datatype_str})"
         literal_counts[key] = int(row['count'])
@@ -524,21 +519,21 @@ def get_building_summary() -> Dict[str, Any]:
             class_values = sorted(class_counts.values())
             percentile_index = int(len(class_values) * percentile)
             class_threshold = class_values[percentile_index] if percentile_index < len(class_values) else 0
-            class_counts = {k: v for k, v in class_counts.items() if v >= class_threshold}
+            class_counts = {k: v for k, v in class_counts.items() if v > class_threshold}
         
         # Filter relationships by percentile
         if relationship_counts:
             rel_values = sorted(relationship_counts.values())
             percentile_index = int(len(rel_values) * percentile)
             rel_threshold = rel_values[percentile_index] if percentile_index < len(rel_values) else 0
-            relationship_counts = {k: v for k, v in relationship_counts.items() if v >= rel_threshold}
+            relationship_counts = {k: v for k, v in relationship_counts.items() if v > rel_threshold}
         
         # Filter literals by percentile
         if literal_counts:
             lit_values = sorted(literal_counts.values())
             percentile_index = int(len(lit_values) * percentile)
             lit_threshold = lit_values[percentile_index] if percentile_index < len(lit_values) else 0
-            literal_counts = {k: v for k, v in literal_counts.items() if v >= lit_threshold}
+            literal_counts = {k: v for k, v in literal_counts.items() if v > lit_threshold}
     
     return {
         "classes": [k for k in class_counts.keys()],
@@ -608,7 +603,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
         
         # Find all entities that are instances of any of these classes
         for target_class in subclasses:
-            for entity in g.subjects(RDF.type, target_class):
+            for entity in parsed_graph.subjects(RDF.type, target_class):
                 entity_info = {
                     "uri": str(entity),
                     "class": str(target_class)
@@ -616,7 +611,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
                 
                 # Try to get a label
                 label = None
-                for lbl in g.objects(entity, RDFS.label):
+                for lbl in parsed_graph.objects(entity, RDFS.label):
                     label = str(lbl)
                     break
                 
@@ -626,7 +621,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
                 entities.append(entity_info)
     else:
         # Only find direct instances
-        for entity in g.subjects(RDF.type, class_uri):
+        for entity in parsed_graph.subjects(RDF.type, class_uri):
             entity_info = {
                 "uri": str(entity),
                 "class": f"{klass}"
@@ -695,7 +690,7 @@ def _timeout_handler(signum, frame):
     raise TimeoutError("SPARQL query timed out after 60 seconds")
 
 @mcp.tool()
-def sparql_query(query: str, result_length: int = 1) -> Dict[str, Any]:
+def sparql_query(query: str, result_length: int = 3) -> Dict[str, Any]:
     """
     Execute custom SPARQL queries for complex questions that other tools cannot answer.
     Only use this for multi-step reasoning, filtering, or complex graph patterns.
@@ -711,7 +706,7 @@ def sparql_query(query: str, result_length: int = 1) -> Dict[str, Any]:
     
     Args:
         query: SPARQL SELECT query (prefixes will be added automatically)
-        result_length: Maximum results to return (default: 1)
+        result_length: Maximum results to return (default: 3)
     
     Returns:
         Query results with bindings for each variable
@@ -721,10 +716,10 @@ def sparql_query(query: str, result_length: int = 1) -> Dict[str, Any]:
     signal.alarm(60)  # 60 seconds timeout
     try:
         print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
-        if result_length > 1:
+        if result_length >= 1:
             query = add_limit_to_sparql(query, limit=result_length)
         else:
-            query = add_limit_to_sparql(query, limit=10000)
+            query = add_limit_to_sparql(query, limit=1000)
         g, parsed_graph = _ensure_graph_loaded()
         prefixes = get_prefixes(parsed_graph)
         full_query = prefixes + "\n" + query
@@ -948,135 +943,3 @@ def _find_instance_to_instance_path(
         "length": 0
     }
 
-def _bidirectional_bfs(
-    g: Graph,
-    start: URIRef,
-    end: URIRef,
-    max_depth: int
-) -> Dict[str, Any]:
-    """
-    Perform bidirectional BFS to find shortest path more efficiently.
-    """
-    # Forward search from start
-    forward_queue = deque([(start, [start], [])])
-    forward_visited = {start: ([], [])}  # node -> (path_nodes, path_predicates)
-    
-    # Backward search from end
-    backward_queue = deque([(end, [end], [])])
-    backward_visited = {end: ([], [])}  # node -> (path_nodes, path_predicates)
-    
-    depth = 0
-    
-    while forward_queue or backward_queue:
-        depth += 1
-        if depth > max_depth:
-            break
-        
-        # Expand forward frontier
-        if forward_queue:
-            for _ in range(len(forward_queue)):
-                current, path_nodes, path_predicates = forward_queue.popleft()
-                
-                # Explore outgoing edges
-                for pred, obj in g.predicate_objects(current):
-                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
-                    if _is_excluded_predicate(pred):
-                        continue
-                    if isinstance(obj, URIRef):
-                        # Check if we've met the backward search
-                        if obj in backward_visited:
-                            back_path, back_preds = backward_visited[obj]
-                            full_path = path_nodes + [obj] + back_path[::-1]
-                            full_preds = path_predicates + [pred] + back_preds[::-1]
-                            return {
-                                "found": True,
-                                "path": [str(node) for node in full_path],
-                                "predicates": [str(p) for p in full_preds],
-                                "length": len(full_path) - 1,
-                                "search_type": "bidirectional"
-                            }
-                        
-                        if obj not in forward_visited:
-                            forward_visited[obj] = (path_nodes + [obj], path_predicates + [pred])
-                            forward_queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
-                
-                # Explore incoming edges
-                for subj, pred in g.subject_predicates(current):
-                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
-                    if _is_excluded_predicate(pred):
-                        continue
-                    if isinstance(subj, URIRef):
-                        # Check if we've met the backward search
-                        if subj in backward_visited:
-                            back_path, back_preds = backward_visited[subj]
-                            full_path = path_nodes + [subj] + back_path[::-1]
-                            full_preds = path_predicates + [pred] + back_preds[::-1]
-                            return {
-                                "found": True,
-                                "path": [str(node) for node in full_path],
-                                "predicates": [str(p) for p in full_preds],
-                                "length": len(full_path) - 1,
-                                "search_type": "bidirectional"
-                            }
-                        
-                        if subj not in forward_visited:
-                            forward_visited[subj] = (path_nodes + [subj], path_predicates + [pred])
-                            forward_queue.append((subj, path_nodes + [subj], path_predicates + [pred]))
-        
-        # Expand backward frontier
-        if backward_queue:
-            for _ in range(len(backward_queue)):
-                current, path_nodes, path_predicates = backward_queue.popleft()
-                
-                # Explore incoming edges (going backward)
-                for subj, pred in g.subject_predicates(current):
-                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
-                    if _is_excluded_predicate(pred):
-                        continue
-                    if isinstance(subj, URIRef):
-                        # Check if we've met the forward search
-                        if subj in forward_visited:
-                            fwd_path, fwd_preds = forward_visited[subj]
-                            full_path = fwd_path + [current] + path_nodes[1:][::-1]
-                            full_preds = fwd_preds + [pred] + path_predicates[::-1]
-                            return {
-                                "found": True,
-                                "path": [str(node) for node in full_path],
-                                "predicates": [str(p) for p in full_preds],
-                                "length": len(full_path) - 1,
-                                "search_type": "bidirectional"
-                            }
-                        
-                        if subj not in backward_visited:
-                            backward_visited[subj] = (path_nodes + [subj], path_predicates + [pred])
-                            backward_queue.append((subj, path_nodes + [subj], path_predicates + [pred]))
-                
-                # Explore outgoing edges (going backward)
-                for pred, obj in g.predicate_objects(current):
-                    # Skip predicates from excluded namespaces (RDF, RDFS, SHACL, QUDT)
-                    if _is_excluded_predicate(pred):
-                        continue
-                    if isinstance(obj, URIRef):
-                        # Check if we've met the forward search
-                        if obj in forward_visited:
-                            fwd_path, fwd_preds = forward_visited[obj]
-                            full_path = fwd_path + [current] + path_nodes[1:][::-1]
-                            full_preds = fwd_preds + [pred] + path_predicates[::-1]
-                            return {
-                                "found": True,
-                                "path": [str(node) for node in full_path],
-                                "predicates": [str(p) for p in full_preds],
-                                "length": len(full_path) - 1,
-                                "search_type": "bidirectional"
-                            }
-                        
-                        if obj not in backward_visited:
-                            backward_visited[obj] = (path_nodes + [obj], path_predicates + [pred])
-                            backward_queue.append((obj, path_nodes + [obj], path_predicates + [pred]))
-    
-    return {
-        "found": False,
-        "path": [],
-        "predicates": [],
-        "length": 0
-    }

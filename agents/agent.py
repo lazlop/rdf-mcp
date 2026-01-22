@@ -357,6 +357,12 @@ class SimpleSparqlAgentMCP:
 
         logger.log(log_entry)
         print(f"📊 Logged results for query_id: {eval_data['query_id']}")
+        pprint({'entity_set_f1': entity_set_f1,
+            'row_matching_f1': row_matching_f1,
+            'exact_match_f1': exact_match_f1,
+            'best_subset_column_f1': best_subset_column_f1,
+            'total_tokens': self.total_tokens}
+            )
 
 
 def run_agent(
