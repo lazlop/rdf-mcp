@@ -12,6 +12,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from jsonschema import ValidationError
 import yaml
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, capture_run_messages
@@ -80,6 +81,12 @@ class SparqlQuery(BaseModel):
     sparql_query: str = Field(..., description="The generated SPARQL query.")
 
 
+class QueryCritique(BaseModel):
+    """Model for the Critique Agent's structured feedback."""
+    decision: str = Field(..., description="The decision, either 'IMPROVE' or 'FINAL'.")
+    feedback: str = Field(..., description="Natural language feedback explaining the decision.")
+
+
 class SimpleSparqlAgentMCP:
     """
     A simplified SPARQL agent that uses MCP tools to generate queries.
@@ -92,7 +99,7 @@ class SimpleSparqlAgentMCP:
         parsed_graph_file: str,
         model_name: str = "lbl/cborg-coder",
         max_tool_calls: int = 30,
-        max_iterations: int = 5,
+        max_iterations: int = 3,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
@@ -120,8 +127,7 @@ class SimpleSparqlAgentMCP:
         self.total_tokens = 0
         self.messages = []
         self.max_iterations = max_iterations
-        # self.toolset = FastMCPToolset(mcp)
-        self.toolset = FastMCPToolset(toolset1_mcp)
+        self.toolset = FastMCPToolset(mcp)
 
         # Load API credentials
         if api_key:
@@ -193,7 +199,7 @@ class SimpleSparqlAgentMCP:
             retries=10
         )
         print('✅ SimpleSparqlAgentMCP initialized successfully.')
-
+   
     async def generate_query(
         self,
         eval_data: Dict[str, Any],
@@ -206,6 +212,8 @@ class SimpleSparqlAgentMCP:
         generated_query = ""
         tool_calls_exceeded = False
         actual_tool_calls = 0
+        critique_feedback = None  # Store critique feedback for next iteration
+        query_results = None  # Store results for retry context
         
         nl_question = eval_data['question']
         ground_truth_sparql = eval_data.get('ground_truth_sparql')
@@ -277,18 +285,19 @@ class SimpleSparqlAgentMCP:
                         f"Remember: Use actual entity names and relationships discovered through the tools."
                     )
                 else:
-                    # Retry iterations: include previous failure context
+                    # Retry iterations: include previous failure context with critique feedback
                     execution_prompt = (
                         f"Question: {nl_question}\n\n"
                         f"Previous attempt failed:\n"
                         f"Query: {generated_query}\n"
-                        f"Result: {json.dumps(query_results)}\n\n"
-                        f"The query returned no results. Analyze what went wrong:\n"
-                        f"1. Use describe_entity on entities that might not exist\n"
-                        f"2. Verify relationship paths with get_relationship_between_classes\n"
-                        f"3. Check sparql_snapshots for correct query patterns\n"
-                        f"4. Generate a corrected SPARQL query\n\n"
-                        f"Think carefully about what information you need to fix the query."
+                        f"Result: {json.dumps(query_results)}\n"
+                        f"Critique Feedback: {critique_feedback}\n\n"
+                        f"The critique agent has identified issues with your query.\n"
+                        # f"1. Use describe_entity on entities that might not exist\n"
+                        # f"2. Verify relationship paths with get_relationship_between_classes\n"
+                        # f"3. Check sparql_snapshots for correct query patterns\n"
+                        # f"4. Generate a corrected SPARQL query that addresses the critique\n\n"
+                        f"Think carefully about the feedback and how you can improve the query. Use sparql_snapshots to ensure you use correct query patterns.\n"
                     )
                 
                 print(f"🔧 Phase 2: Execution (Iteration {i+1}/{self.max_iterations})...")
@@ -338,32 +347,105 @@ class SimpleSparqlAgentMCP:
                         generated_query = result.output.sparql_query
                         print(f"✅ Generated query (used {iteration_tool_calls} tools this iteration, {actual_tool_calls}/{self.max_tool_calls} total):\n{generated_query}")
                     
-                    # =========================================================================
-                    # PHASE 3: OBSERVATION - Test the query and decide next action
-                    # =========================================================================
-                    print("🔍 Phase 3: Testing query...")
-                    query_results = sparql_query(generated_query, result_length=100)
+                # =========================================================================
+                # PHASE 3: OBSERVATION - Test the query and decide next action
+                # =========================================================================
+                print("🔍 Phase 3: Testing and critiquing query...")
+
+                # Execute the query
+                query_results = sparql_query(generated_query, result_length=100)
+
+                # Prepare results summary for critique
+                if query_results and query_results['row_count'] > 0:
+                    results_summary = f"Query returned {query_results['row_count']} results successfully."
+                    print(f"   ✅ {results_summary}")
+                else:
+                    error_msg = query_results.get('error', 'No results') if query_results else 'Query execution failed'
+                    results_summary = f"Query failed with error: {error_msg}"
+                    print(f"   ❌ {results_summary}")
+
+                # Call Critique Agent to evaluate the query
+                print("🧐 Calling Critique Agent...")
+                
+                # Create critique agent with structured output
+                critique_agent = Agent(
+                    self.model,
+                    output_type=QueryCritique,
+                    toolsets = [self.toolset],
+                    system_prompt=(
+                        "You are an expert in SPARQL, especially for Brick Schema and ASHRAE 223p. "
+                        "Your job is to review a SPARQL query and its results based on an original question. "
+                        "Think carefully about whether the query answers the question accurately. Does it retrieve enough results? "
+                        "Provide brief constructive feedback to improve the query if needed."
+                        "Use 'FINAL' if the query correctly answers the question, even with zero results if that's the accurate answer. "
+                        "Use 'IMPROVE' if the query has errors, incorrect logic, or doesn't address the question properly."
+                    ),
+                )
+                
+                # Build critique prompt
+                critique_prompt = (
+                    f"Original Question: \"{nl_question}\"\n\n"
+                    f"SPARQL Query Attempt:\n```sparql\n{generated_query}\n```\n\n"
+                    f"Execution Results Summary:\n{results_summary}\n\n"
+                    f"Sample Results (if any):\n"
+                    f"{json.dumps(query_results.get('results', [])[:3], indent=2) if query_results and query_results.get('results') else 'None'}\n\n"
+                    f"Provide your decision (FINAL or IMPROVE) and detailed feedback."
+                )
+                
+                try:
+                    with capture_run_messages() as critique_messages:
+                        critique_result = await critique_agent.run(
+                            critique_prompt,
+                            usage_limits=self.limits,
+                        )
+                        
+                        # Track tokens from critique
+                        if hasattr(critique_result, 'usage'):
+                            usage = critique_result.usage()
+                            if usage:
+                                self.prompt_tokens += usage.input_tokens
+                                self.completion_tokens += usage.output_tokens
+                                self.total_tokens += usage.total_tokens
+                        
+                        self.all_previous_messages += [str(msg) for msg in critique_messages]
                     
-                    if query_results and query_results['row_count'] > 0:
-                        print(f"   ✅ Query returned {query_results['row_count']} results - Success!")
+                    # Extract critique data
+                    critique = critique_result.output
+                    
+                    print(f"   -> Critique Decision: {critique.decision}")
+                    print(f"   -> Critique Feedback: {critique.feedback}")
+
+                    # Act on critique decision
+                    if critique.decision == "FINAL":
+                        print("\n✅ Critique Agent approved the query. Refinement complete.")
                         break
                     else:
-                        error_msg = query_results.get('error', 'No results') if query_results else 'Query execution failed'
-                        print(f"   ❌ Query failed: {error_msg}")
+                        # Query needs improvement - store feedback for next iteration
+                        print(f"   ⚠️  Query needs improvement: {critique.feedback}")
+                        critique_feedback = critique.feedback
                         
                         if not RUN_UNTIL_RESULTS:
                             print("   Stopping after single iteration (RUN_UNTIL_RESULTS=False)")
                             break
                         
-                        print(f"   🔄 Retrying ({i+1}/{self.max_iterations})...")
+                        print(f"   🔄 Retrying with feedback ({i+1}/{self.max_iterations})...")
+                        # feedback will be used in next iteration's execution_prompt
                 
-                if not RUN_UNTIL_RESULTS:
-                    break
+                except Exception as e:
+                    print(f"❌ Critique Agent failed: {e}")
+                    if not RUN_UNTIL_RESULTS:
+                        print("   Stopping after single iteration (RUN_UNTIL_RESULTS=False)")
+                        break
+                    print(f"   🔄 Retrying ({i+1}/{self.max_iterations})...")
+                    critique_feedback = f"Critique agent failed with error: {str(e)}. Please review and improve your query."
+                    continue
+            
         except Exception as e:
-            print(f"❌ Query generation failed: {e}")
-            self.all_previous_messages += [str(msg) for msg in messages]
+            print(f"❌ Error during query generation: {e}")
+            import traceback
             traceback.print_exc()
-            generated_query = os.getenv("LAST_SPARQL_QUERY")
+            generated_query = ""
+            tool_calls_exceeded = False
 
         if not generated_query:
             if tool_calls_exceeded:
