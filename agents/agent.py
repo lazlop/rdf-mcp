@@ -181,8 +181,8 @@ class SimpleSparqlAgentMCP:
             f"Step 5: If query fails, call describe_entity on problematic entities\n\n"
             f"IMPORTANT: You must call tools to gather information before writing the query. "
             f"Do not guess - use the tools to verify entity names, relationships, and patterns.\n\n"
-            f"When returning projections, include more variables rather than fewer.\n"
-            f"Maximum tool calls available: {self.max_tool_calls}\n"
+            f"When returning projections, include more columns rather than fewer.\n"
+            # f"Maximum tool calls available: {self.max_tool_calls}\n"
             )
 
         self.agent = Agent(
@@ -194,50 +194,13 @@ class SimpleSparqlAgentMCP:
         )
         print('✅ SimpleSparqlAgentMCP initialized successfully.')
 
-    # -------------------------------------------------------------------------
-    # Exponential backoff helper
-    # -------------------------------------------------------------------------
-    async def _exponential_backoff(self, coro, *args, delays: List[int] = [0, 30, 60, 5*60, 15*60, 30*60]):
-        """
-        Retry an async callable with exponential backoff.
-
-        Parameters
-        ----------
-        coro : Callable
-            The coroutine function to execute.
-        *args :
-            Arguments to pass to the coroutine.
-        delays : List[int]
-            List of delays (in seconds) between retries. Defaults to 5, 15, 30 minutes.
-
-        Returns
-        -------
-        Any
-            The result of the successful coroutine call.
-
-        Raises
-        ------
-        Exception
-            Propagates the last exception if all retries fail.
-        """
-        last_exc = None
-        for i, delay in enumerate(delays):
-            try:
-                return await coro(*args)
-            except Exception as exc:
-                last_exc = exc
-                if i == len(delays) - 1:
-                    break
-                await asyncio.sleep(delay)
-        raise last_exc
-
     async def generate_query(
         self,
         eval_data: Dict[str, Any],
         logger: CsvLogger,
         prefixes: str,
     ) -> None:
-        """Generate and evaluate a SPARQL query."""
+        """Generate and evaluate a SPARQL query using ReAct-like approach."""
         self.prompt_tokens = self.completion_tokens = self.total_tokens = 0
         
         generated_query = ""
@@ -249,30 +212,98 @@ class SimpleSparqlAgentMCP:
 
         print(f"\n🚀 Generating query for: '{nl_question}'")
 
-        user_message = (
+        # =========================================================================
+        # PHASE 1: PLANNING - Get the model to think about what tools it needs
+        # =========================================================================
+        planning_prompt = (
             f"Question: {nl_question}\n\n"
-            f"Before writing the query:\n"
-            f"1. First, tell me what tools you need to call and why\n"
-            f"2. Then call those tools\n"
-            f"3. Finally, construct the SPARQL query based on the tool results\n\n"
-            f"Think step-by-step and use the available tools."
+            f"Available tools:\n"
+            f"- get_building_summary: Get overview of building structure and entities\n"
+            f"- get_relationship_between_classes: Find predicate paths between entity classes\n"
+            f"- sparql_snapshots: See example SPARQL query patterns\n"
+            f"- describe_entity: Get detailed information about a specific entity\n\n"
+            f"Think step-by-step:\n"
+            f"1. What information do I need to answer this question?\n"
+            f"2. Which tools should I call and in what order?\n"
+            f"3. What am I looking for from each tool?\n\n"
+            f"Provide your reasoning and planned approach."
         )
+        
         try:
             self.all_previous_messages = []
-            all_messages = []
-            message_history = []
+            
+            # Create a planning agent without structured output
+            planning_agent = Agent(
+                self.model,
+                toolsets=[self.toolset],
+                system_prompt="You are a helpful assistant that plans approaches to solving SPARQL query generation tasks.",
+            )
+            
+            print("📋 Phase 1: Planning approach...")
+            with capture_run_messages() as planning_messages:
+                planning_result = await planning_agent.run(
+                    planning_prompt,
+                    usage_limits=self.limits,
+                )
+                
+                # Track tokens from planning
+                if hasattr(planning_result, 'usage'):
+                    usage = planning_result.usage()
+                    if usage:
+                        self.prompt_tokens += usage.input_tokens
+                        self.completion_tokens += usage.output_tokens
+                        self.total_tokens += usage.total_tokens
+                
+                self.all_previous_messages += [str(msg) for msg in planning_messages]
+            
+            plan = planning_result.data if hasattr(planning_result, 'data') else str(planning_result)
+            print(f"📝 Plan: {plan}\n")
+            
+            # =========================================================================
+            # PHASE 2: EXECUTION - Execute the plan and generate query
+            # =========================================================================
             for i in range(self.max_iterations):
                 iteration_tool_calls = 0
+                
+                if i == 0:
+                    # First iteration: use the plan
+                    execution_prompt = (
+                        f"Question: {nl_question}\n\n"
+                        f"Your planned approach:\n{plan}\n\n"
+                        f"Now execute this plan:\n"
+                        f"1. Call the tools you identified to gather necessary information\n"
+                        f"2. Use the tool results to construct an accurate SPARQL query\n"
+                        f"3. Return the complete SPARQL query\n\n"
+                        f"Remember: Use actual entity names and relationships discovered through the tools."
+                    )
+                else:
+                    # Retry iterations: include previous failure context
+                    execution_prompt = (
+                        f"Question: {nl_question}\n\n"
+                        f"Previous attempt failed:\n"
+                        f"Query: {generated_query}\n"
+                        f"Result: {json.dumps(query_results)}\n\n"
+                        f"The query returned no results. Analyze what went wrong:\n"
+                        f"1. Use describe_entity on entities that might not exist\n"
+                        f"2. Verify relationship paths with get_relationship_between_classes\n"
+                        f"3. Check sparql_snapshots for correct query patterns\n"
+                        f"4. Generate a corrected SPARQL query\n\n"
+                        f"Think carefully about what information you need to fix the query."
+                    )
+                
+                print(f"🔧 Phase 2: Execution (Iteration {i+1}/{self.max_iterations})...")
+                
                 with capture_run_messages() as messages:
                     async def _run_agent(message_history=[]):
                         return await self.agent.run(
-                            user_message,
+                            execution_prompt,
                             message_history=message_history,
                             usage_limits=self.limits, 
                         )
-                    # result = await self._exponential_backoff(_run_agent)
+                    
                     result = await _run_agent()
-                    # track tokens
+                    
+                    # Track tokens
                     if hasattr(result, 'usage'):
                         usage = result.usage()
                         if usage:
@@ -280,6 +311,7 @@ class SimpleSparqlAgentMCP:
                             self.completion_tokens += usage.output_tokens
                             self.total_tokens += usage.total_tokens
                     
+                    # Count tool calls
                     for msg in messages:
                         if hasattr(msg, 'parts'):
                             for part in msg.parts:
@@ -287,32 +319,44 @@ class SimpleSparqlAgentMCP:
                                     iteration_tool_calls += 1
                                 elif type(part).__name__ == 'ToolCallPart':
                                     iteration_tool_calls += 1
-                    actual_tool_calls += iteration_tool_calls
                     
+                    actual_tool_calls += iteration_tool_calls
+                    self.all_previous_messages += [str(msg) for msg in messages]
+                    
+                    # Check if no tools were called on first execution
+                    if i == 0 and iteration_tool_calls == 0:
+                        print("⚠️ No tools called in first iteration - this may indicate the model is guessing!")
+                        print("   Consider making tool usage mandatory in your system prompt.")
+                    
+                    # Check tool call limit
                     if actual_tool_calls > self.max_tool_calls:
                         tool_calls_exceeded = True
                         print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
                         generated_query = ""
-                    else:
-                        generated_query = result.output.sparql_query
-                        print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
-                    
-                    query_results = sparql_query(generated_query, result_length=10)
-                    self.all_previous_messages += [str(msg) for msg in messages]
-                    
-                    if query_results and query_results['row_count'] > 0:
-                        print(f"   -> Query returned {query_results['row_count']} results.")
                         break
                     else:
-                        print(f"   -> Query returned no results. Retrying ({i+1}/{self.max_iterations})...")
-                        # Update user_message for next iteration with failed query context
-                        user_message = (
-                            f"Question: {nl_question}\n\n"
-                            f"Previous attempt returned no results\n"
-                            f"Query: {generated_query}\n"
-                            f"Result: {json.dumps(query_results)}\n\n"
-                            f"Please try again, and use the available tools to ensure that the query returns the correct data."
-                        )
+                        generated_query = result.output.sparql_query
+                        print(f"✅ Generated query (used {iteration_tool_calls} tools this iteration, {actual_tool_calls}/{self.max_tool_calls} total):\n{generated_query}")
+                    
+                    # =========================================================================
+                    # PHASE 3: OBSERVATION - Test the query and decide next action
+                    # =========================================================================
+                    print("🔍 Phase 3: Testing query...")
+                    query_results = sparql_query(generated_query, result_length=100)
+                    
+                    if query_results and query_results['row_count'] > 0:
+                        print(f"   ✅ Query returned {query_results['row_count']} results - Success!")
+                        break
+                    else:
+                        error_msg = query_results.get('error', 'No results') if query_results else 'Query execution failed'
+                        print(f"   ❌ Query failed: {error_msg}")
+                        
+                        if not RUN_UNTIL_RESULTS:
+                            print("   Stopping after single iteration (RUN_UNTIL_RESULTS=False)")
+                            break
+                        
+                        print(f"   🔄 Retrying ({i+1}/{self.max_iterations})...")
+                
                 if not RUN_UNTIL_RESULTS:
                     break
         except Exception as e:

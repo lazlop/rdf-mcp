@@ -526,7 +526,7 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
         query: SPARQL SELECT query (prefixes will be added automatically)
     
     Returns:
-        Top 3 query results with bindings for each variable
+        Top 10 query results with bindings for each variable
     """
     result_length = 10
     g, parsed_graph = _ensure_graph_loaded()
@@ -537,7 +537,7 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
     input_query = query
     try:
         print(f"\n🔎 Getting SPARQL Snapshot")
-        query = add_limit_to_sparql(query, limit=result_length)
+        query = add_limit_to_sparql(query, limit=10000)
         g, parsed_graph = _ensure_graph_loaded()
         prefixes = get_prefixes(parsed_graph)
         full_query = prefixes + "\n" + query
@@ -545,7 +545,7 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
         # print(full_query)
         qres = parsed_graph.query(full_query)
         formatted_results = _format_rdflib_results(qres)
-        bindings = formatted_results["results"][:result_length]
+        bindings = formatted_results["results"]
         summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
         if not bindings:
             summary = "The query executed successfully on the local graph but returned no results."
@@ -556,7 +556,7 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
             print(bindings)
         return {
             "summary_string": summary,
-            "results": bindings,
+            "results": bindings[:result_length],
             "row_count": len(bindings),
             "col_count": len(formatted_results["variables"]),
             "syntax_ok": True,
