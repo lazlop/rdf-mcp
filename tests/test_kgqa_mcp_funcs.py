@@ -7,8 +7,10 @@ import sys
 from rdflib import URIRef
 # Set up environment variable for graph file
 # Update this path to point to your actual Brick TTL file
-GRAPH_FILE = '../../BuildingQA/bschema/without-ontology/b59.ttl' #"test-building.ttl"
+# GRAPH_FILE = '../../BuildingQA/bschema/without-ontology/b59.ttl' 
+GRAPH_FILE = "test-building.ttl"
 os.environ["GRAPH_FILE"] = GRAPH_FILE
+os.environ["PARSED_GRAPH_FILE"] = GRAPH_FILE
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the MCP server functions
@@ -20,6 +22,7 @@ from agents.kgqa import (
     find_entities_by_type,
     get_relationship_between_classes,
     fuzzy_search_concept,
+    get_sparql_prefixes,
     _ensure_graph_loaded
 )
 
@@ -33,9 +36,13 @@ def test_graph_loading():
     """Test 1: Verify graph loads correctly"""
     print_section("TEST 1: Graph Loading")
     try:
-        graph = _ensure_graph_loaded()
+        graph, pg = _ensure_graph_loaded()
         print(f"✅ Graph loaded successfully")
         print(f"   Total triples: {len(graph)}")
+        print(" get sparql prefixes: ")
+        prefixes = get_sparql_prefixes()
+        print(type(prefixes))
+        pprint(prefixes)
         return True
     except Exception as e:
         print(f"❌ Failed to load graph: {e}")
@@ -69,13 +76,8 @@ def test_find_entities_by_type():
     
     for brick_class in test_classes:
         try:
-            result = find_entities_by_type(brick_class)
-            print(f"\n🔍 Searching for '{brick_class}':")
-            print(f"   First 3 entities:")
-            for entity in result['entities'][:3]:
-                label = entity.get('label', 'No label')
-                print(f"   - {label} ({entity['class']})")
-                print(f"     URI: {entity['uri']}")
+            result = find_entities_by_type(BRICK[brick_class])
+            print(list(result.values())[:5])
         except Exception as e:
             print(f"❌ Failed for {brick_class}: {e}")
     
@@ -83,7 +85,7 @@ def test_find_entities_by_type():
     print("\n🔍 Testing without subclasses (Equipment only):")
     try:
         result = find_entities_by_type(BRICK["Equipment"])
-        print(f"   {result['summary']}")
+        print(list(result.values())[:5])
     except Exception as e:
         print(f"❌ Failed: {e}")
 
@@ -98,18 +100,18 @@ def test_entity_info():
         print(f"📍 Testing with entity: {entity_uri}")
         
         # Get 1-hop info
-        info = describe_entity(entity_uri, num_hops=1)
+        info = describe_entity(entity_uri)
         print(f"✅ Retrieved entity info (1 hop)")
         print(f"   Turtle output length: {len(info)} characters")
         print(f"\n   First 500 characters:")
         print(f"   {info[:500]}...")
-        print(info)
-        print('with 2 hops:')
-        info = describe_entity(entity_uri, num_hops=2)
-        print(f"✅ Retrieved entity info (2 hops)")
-        print(f"   Turtle output length: {len(info)} characters")
-        print(f"\n   First 500 characters:")
-        print(f"   {info[:500]}...")
+        # print(info)
+        # print('with 2 hops:')
+        # info = describe_entity(entity_uri)
+        # print(f"✅ Retrieved entity info (2 hops)")
+        # print(f"   Turtle output length: {len(info)} characters")
+        # print(f"\n   First 500 characters:")
+        # print(f"   {info[:500]}...")
     except Exception as e:
         print(f"❌ Failed: {e}")
         import traceback
@@ -255,12 +257,12 @@ def main():
     # Run tests
     tests = [
         test_graph_loading,
-        # test_building_summary,
-        # test_find_entities_by_type,
-        # test_entity_info,
-        # test_sparql_query,
-        # test_shortest_path,
-        # test_error_handling,
+        test_building_summary,
+        test_find_entities_by_type,
+        test_entity_info,
+        test_sparql_query,
+        test_shortest_path,
+        test_error_handling,
         test_fuzzy_search,
     ]
     
