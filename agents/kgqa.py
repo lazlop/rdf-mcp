@@ -386,7 +386,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
             for entity in parsed_graph.subjects(RDF.type, target_class):
                 entity_info = {
                     "uri": convert_to_prefixed(str(entity), parsed_graph),
-                    "class": convert_to_prefixed(str(target_class), parsed_graph)
+                    # "class": convert_to_prefixed(str(target_class), parsed_graph)
                 }
                 
                 # Try to get a label
@@ -404,7 +404,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
         for entity in parsed_graph.subjects(RDF.type, class_uri):
             entity_info = {
                 "uri": convert_to_prefixed(str(entity), parsed_graph),
-                "class": convert_to_prefixed(klass, parsed_graph)
+                # "class": convert_to_prefixed(klass, parsed_graph)
             }
             
             # Try to get a label
