@@ -40,8 +40,8 @@ from scripts.utils import CsvLogger
 from agents.kgqa import sparql_query, mcp, toolset1_mcp
 
 
-# RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
-RUN_UNTIL_RESULTS = False  
+RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
+# RUN_UNTIL_RESULTS = False # Just a single pass 
 
 class SparqlQuery(BaseModel):
     """Model for the agent's output."""
@@ -133,17 +133,20 @@ class SimpleSparqlAgentMCP:
             provider=OpenAIProvider(base_url=self.base_url, api_key=self.api_key),
         )
 
-        self.limits = UsageLimits(total_tokens_limit = 150000, request_limit = 20)
+        self.limits = UsageLimits(total_tokens_limit = 100000, request_limit = 20)
 
         recommended_tool_calls = self.max_tool_calls // 3
         system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223. \n"
-            f"Generate a complete SPARQL SELECT query to answer the user's question. \n"
-            f"Use the provided MCP tools to generate the query."
-            f"Begin by calling the get_building_summary. "
-            f"SELECT ALL RELEVANT DATA FROM IN THE QUERY, INCLUDING INFORMATION USED FOR FILTERING THE ANSWER.\n"
-            f"ONCE YOU HAVE GENERATED A SUCCESSFUL QUERY, PROVIDE YOUR FINAL ANSWER.\n"
-            # f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
+            f"Your job is to write a single, complete SPARQL query to answer the user's request. "
+            f"An example workflow using the available tools may be:\n"
+            f"1) use get_building_summary to understand the building model,\n"
+            f"2) use get_relationship_between_classes to find predicate paths between classes,\n"
+            f"3) look at sparql_snapshots to construct a final query.\n"
+            f"If the query is incorrect, you may use describe_entity to understand entities better.\n"
+            f"If you are unsure about how many projections to return, return more rather than fewer. "
+            # f"ONCE YOU HAVE GENERATED A SUCCESSFUL QUERY THAT ANSWERS THE USER REQUEST, PROVIDE YOUR FINAL ANSWER.\n"
+            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
         )
 
         self.agent = Agent(
@@ -151,7 +154,7 @@ class SimpleSparqlAgentMCP:
             output_type=SparqlQuery,
             toolsets = [self.toolset],
             system_prompt=system_prompt,
-            retries=3
+            retries=10
         )
         print('✅ SimpleSparqlAgentMCP initialized successfully.')
 
@@ -213,11 +216,12 @@ class SimpleSparqlAgentMCP:
         user_message = f"Question: {nl_question}"
         try:
             self.all_previous_messages = []
+            all_messages = []
             message_history = []
             for i in range(self.max_iterations):
                 iteration_tool_calls = 0
                 with capture_run_messages() as messages:
-                    async def _run_agent(message_history=message_history):
+                    async def _run_agent(message_history=[]):
                         return await self.agent.run(
                             user_message,
                             message_history=message_history,
@@ -236,34 +240,36 @@ class SimpleSparqlAgentMCP:
                     for msg in messages:
                         if hasattr(msg, 'parts'):
                             for part in msg.parts:
-                                # Check if this part is a tool call
                                 if hasattr(part, 'part_kind') and part.part_kind == 'tool-call':
                                     iteration_tool_calls += 1
-                                # Alternative: check the type name
                                 elif type(part).__name__ == 'ToolCallPart':
                                     iteration_tool_calls += 1
                     actual_tool_calls += iteration_tool_calls
                     
-                    # Check if tool calls exceeded limit
                     if actual_tool_calls > self.max_tool_calls:
                         tool_calls_exceeded = True
                         print(f"⚠️ Tool call limit exceeded: {actual_tool_calls}/{self.max_tool_calls}")
                         generated_query = ""
                     else:
-                        print(result)
-                        print()
-                        print(result.output)
                         generated_query = result.output.sparql_query
                         print(f"✅ Generated query (used {actual_tool_calls}/{self.max_tool_calls} tool calls):\n{generated_query}")
-                    query_results = sparql_query(generated_query, result_length = 10)
+                    
+                    query_results = sparql_query(generated_query, result_length=10)
                     self.all_previous_messages += [str(msg) for msg in messages]
+                    
                     if query_results and query_results['row_count'] > 0:
                         print(f"   -> Query returned {query_results['row_count']} results.")
                         break
                     else:
-                        print(f"   -> Query returned no results. Check each element of the query and try again ({i+1}/{self.max_iterations})...")
-                        # self.messages.extend(["Query failed to return results: ", json.dumps(query_results)])
-                        message_history = [f"Query failed to return results. Write a simpler query and use available tools to double check that the query will return results: : {json.dumps(query_results)}"]
+                        print(f"   -> Query returned no results. Retrying ({i+1}/{self.max_iterations})...")
+                        # Update user_message for next iteration with failed query context
+                        user_message = (
+                            f"Question: {nl_question}\n\n"
+                            f"Previous attempt returned no results\n"
+                            f"Query: {generated_query}\n"
+                            f"Result: {json.dumps(query_results)}\n\n"
+                            f"Please try again, and use the available tools to ensure that the query returns the correct data."
+                        )
                 if not RUN_UNTIL_RESULTS:
                     break
         except Exception as e:
@@ -310,9 +316,14 @@ class SimpleSparqlAgentMCP:
         # unnecessary, but also don't need to remove. 
         # -----------------------------------------------------------------
         
-        gen_results_obj = sparql_query(generated_query, result_length = -1)
+        print("Evaluating generated query...")
+        print(generated_query)
+        gen_results_obj = sparql_query(generated_query)
+
+        print("Evaluating ground truth query...")
+        print(ground_truth_sparql)
         if ground_truth_sparql:
-            gt_results_obj = sparql_query(ground_truth_sparql, result_length = -1)        
+            gt_results_obj = sparql_query(ground_truth_sparql)        
         # Calculate metrics
         print("Calculating evaluation metrics...")
         arity_f1, entity_set_f1, row_matching_f1, exact_match_f1, best_subset_column_f1 = 0.0, 0.0, 0.0, 0.0, 0.0
