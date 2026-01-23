@@ -359,7 +359,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     top_n = 20
     g, parsed_graph = _ensure_graph_loaded()
     class_uri = URIRef(klass)
-    include_subclasses = True # may not want this all the time
+    include_subclasses = False # may not want this all the time
     # Check if the class exists in the ontology
     if (class_uri, RDF.type, None) not in ontology and \
        (class_uri, RDFS.subClassOf, None) not in ontology:
@@ -1088,7 +1088,7 @@ def _ensure_uri_finder_loaded():
 def fuzzy_search_concept(
     query: str,
     search_type: typeLiteral["both", "classes", "predicates"] = "both",
-    n_results: int = 5
+    n_results: int = 10
 ) -> Dict[str, Any]:
     """
     Find classes or predicates that match the search query using semantic similarity.
@@ -1103,7 +1103,7 @@ def fuzzy_search_concept(
                     - "both": Search both classes and predicates (default)
                     - "classes": Search only classes
                     - "predicates": Search only predicates
-        n_results: Number of similar results to return (default: 5)
+        n_results: Number of similar results to return (default: 10)
     
     Returns:
         Dictionary containing:
