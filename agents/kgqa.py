@@ -9,7 +9,7 @@ import sys
 import signal
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK
+from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK, convert_to_prefixed
 
 mcp = FastMCP("GraphDemo")
 toolset1_mcp = FastMCP("t1")
@@ -74,14 +74,21 @@ def _ensure_graph_loaded():
         print(f"✅ Loaded graph from {graph_file} ({len(graph)} triples)")
     return graph, parsed_graph
 
-def _format_term(term) -> Dict[str, Any]:
-    """Format an RDF term for JSON serialization"""
+def _format_term(term, graph=None) -> Dict[str, Any]:
+    """Format an RDF term for JSON serialization with prefixed URIs"""
     if isinstance(term, URIRef):
-        return {'type': 'uri', 'value': str(term)}
+        if graph is not None:
+            prefixed_value = convert_to_prefixed(str(term), graph)
+        else:
+            prefixed_value = str(term)
+        return {'type': 'uri', 'value': prefixed_value}
     elif isinstance(term, Literal):
         result = {'type': 'literal', 'value': str(term)}
         if term.datatype:
-            result['datatype'] = str(term.datatype)
+            if graph is not None:
+                result['datatype'] = convert_to_prefixed(str(term.datatype), graph)
+            else:
+                result['datatype'] = str(term.datatype)
         if term.language:
             result['language'] = term.language
         return result
@@ -89,266 +96,7 @@ def _format_term(term) -> Dict[str, Any]:
         return {'type': 'bnode', 'value': str(term)}
     else:
         return {'type': 'unknown', 'value': str(term)}
-
-# @mcp.tool()
-# def subjects(
-#     predicate: Optional[str] = None,
-#     object: Optional[str] = None,
-#     limit: int = 100
-# ) -> Dict[str, Any]:
-#     """
-#     Get subjects matching the given predicate and object pattern.
     
-#     Args:
-#         predicate: Optional predicate URI to filter by
-#         object: Optional object value to filter by (URI or literal)
-#         limit: Maximum number of results to return (default: 100)
-    
-#     Returns:
-#         List of matching subjects with their types
-#     """
-#     g, parsed_g = _ensure_graph_loaded()
-    
-#     # Convert string inputs to RDF terms
-#     pred = URIRef(predicate) if predicate else None
-#     obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
-    
-#     subjects_list = []
-#     count = 0
-    
-#     for subj in g.subjects(pred, obj):
-#         if count >= limit:
-#             break
-#         subjects_list.append(_format_term(subj))
-#         count += 1
-    
-#     pattern = f"predicate={predicate or 'ANY'}, object={object or 'ANY'}"
-#     summary = f"Found {len(subjects_list)} subjects matching pattern: {pattern}"
-    
-#     return {
-#         "summary": summary,
-#         "pattern": {"predicate": predicate, "object": object},
-#         "subjects": subjects_list,
-#         "count": len(subjects_list),
-#         "limited": count >= limit
-#     }
-
-# @mcp.tool()
-# def predicates(
-#     subject: Optional[str] = None,
-#     object: Optional[str] = None,
-#     limit: int = 100
-# ) -> Dict[str, Any]:
-#     """
-#     Get predicates matching the given subject and object pattern.
-    
-#     Args:
-#         subject: Optional subject URI to filter by
-#         object: Optional object value to filter by (URI or literal)
-#         limit: Maximum number of results to return (default: 100)
-    
-#     Returns:
-#         List of matching predicates
-#     """
-#     g, parsed_g = _ensure_graph_loaded()
-    
-#     # Convert string inputs to RDF terms
-#     subj = URIRef(subject) if subject else None
-#     obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
-    
-#     predicates_list = []
-#     count = 0
-    
-#     for pred in g.predicates(subj, obj):
-#         if count >= limit:
-#             break
-#         predicates_list.append(_format_term(pred))
-#         count += 1
-    
-#     pattern = f"subject={subject or 'ANY'}, object={object or 'ANY'}"
-#     summary = f"Found {len(predicates_list)} predicates matching pattern: {pattern}"
-    
-#     return {
-#         "summary": summary,
-#         "pattern": {"subject": subject, "object": object},
-#         "predicates": predicates_list,
-#         "count": len(predicates_list),
-#         "limited": count >= limit
-#     }
-
-# @mcp.tool()
-# def objects(
-#     subject: Optional[str] = None,
-#     predicate: Optional[str] = None,
-#     limit: int = 100
-# ) -> Dict[str, Any]:
-#     """
-#     Get objects matching the given subject and predicate pattern.
-    
-#     Args:
-#         subject: Optional subject URI to filter by
-#         predicate: Optional predicate URI to filter by
-#         limit: Maximum number of results to return (default: 100)
-    
-#     Returns:
-#         List of matching objects with their types
-#     """
-#     g, parsed_g = _ensure_graph_loaded()
-    
-#     # Convert string inputs to RDF terms
-#     subj = URIRef(subject) if subject else None
-#     pred = URIRef(predicate) if predicate else None
-    
-#     objects_list = []
-#     count = 0
-    
-#     for obj in g.objects(subj, pred):
-#         if count >= limit:
-#             break
-#         objects_list.append(_format_term(obj))
-#         count += 1
-    
-#     pattern = f"subject={subject or 'ANY'}, predicate={predicate or 'ANY'}"
-#     summary = f"Found {len(objects_list)} objects matching pattern: {pattern}"
-    
-#     return {
-#         "summary": summary,
-#         "pattern": {"subject": subject, "predicate": predicate},
-#         "objects": objects_list,
-#         "count": len(objects_list),
-#         "limited": count >= limit
-#     }
-
-# @mcp.tool()
-# def subject_predicates(
-#     object: Optional[str] = None,
-#     limit: int = 100
-# ) -> Dict[str, Any]:
-#     """
-#     Get subject-predicate pairs for triples matching the given object.
-    
-#     Args:
-#         object: Optional object value to filter by (URI or literal)
-#         limit: Maximum number of results to return (default: 100)
-    
-#     Returns:
-#         List of (subject, predicate) pairs
-#     """
-#     g, parsed_g = _ensure_graph_loaded()
-    
-#     # Convert string input to RDF term
-#     obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
-    
-#     pairs_list = []
-#     count = 0
-    
-#     for subj, pred in g.subject_predicates(obj):
-#         if count >= limit:
-#             break
-#         pairs_list.append({
-#             "subject": _format_term(subj),
-#             "predicate": _format_term(pred)
-#         })
-#         count += 1
-    
-#     pattern = f"object={object or 'ANY'}"
-#     summary = f"Found {len(pairs_list)} subject-predicate pairs matching pattern: {pattern}"
-    
-#     return {
-#         "summary": summary,
-#         "pattern": {"object": object},
-#         "pairs": pairs_list,
-#         "count": len(pairs_list),
-#         "limited": count >= limit
-#     }
-
-# @mcp.tool()
-# def predicate_objects(
-#     subject: Optional[str] = None,
-#     limit: int = 100
-# ) -> Dict[str, Any]:
-#     """
-#     Get predicate-object pairs for triples matching the given subject.
-    
-#     Args:
-#         subject: Optional subject URI to filter by
-#         limit: Maximum number of results to return (default: 100)
-    
-#     Returns:
-#         List of (predicate, object) pairs
-#     """
-#     g, parsed_g = _ensure_graph_loaded()
-    
-#     # Convert string input to RDF term
-#     subj = URIRef(subject) if subject else None
-    
-#     pairs_list = []
-#     count = 0
-    
-#     for pred, obj in g.predicate_objects(subj):
-#         if count >= limit:
-#             break
-#         pairs_list.append({
-#             "predicate": _format_term(pred),
-#             "object": _format_term(obj)
-#         })
-#         count += 1
-    
-#     pattern = f"subject={subject or 'ANY'}"
-#     summary = f"Found {len(pairs_list)} predicate-object pairs matching pattern: {pattern}"
-    
-#     return {
-#         "summary": summary,
-#         "pattern": {"subject": subject},
-#         "pairs": pairs_list,
-#         "count": len(pairs_list),
-#         "limited": count >= limit
-#     }
-
-# @mcp.tool()
-# def subject_objects(
-#     predicate: Optional[str] = None,
-#     limit: int = 100
-# ) -> Dict[str, Any]:
-#     """
-#     Get subject-object pairs for triples matching the given predicate.
-    
-#     Args:
-#         predicate: Optional predicate URI to filter by
-#         limit: Maximum number of results to return (default: 100)
-    
-#     Returns:
-#         List of (subject, object) pairs
-#     """
-#     g, parsed_g = _ensure_graph_loaded()
-    
-#     # Convert string input to RDF term
-#     pred = URIRef(predicate) if predicate else None
-    
-#     pairs_list = []
-#     count = 0
-    
-#     for subj, obj in g.subject_objects(pred):
-#         if count >= limit:
-#             break
-#         pairs_list.append({
-#             "subject": _format_term(subj),
-#             "object": _format_term(obj)
-#         })
-#         count += 1
-    
-#     pattern = f"predicate={predicate or 'ANY'}"
-#     summary = f"Found {len(pairs_list)} subject-object pairs matching pattern: {pattern}"
-    
-#     return {
-#         "summary": summary,
-#         "pattern": {"predicate": predicate},
-#         "pairs": pairs_list,
-#         "count": len(pairs_list),
-#         "limited": count >= limit
-#     }
-
-
 @mcp.tool()
 def describe_entity(
     entity: str | URIRef
@@ -457,7 +205,7 @@ def get_building_summary() -> Dict[str, Any]:
     
     class_counts = {}
     for row in g.query(class_query):
-        class_name = str(row['class'])
+        class_name = convert_to_prefixed(row['class'], g)
         class_counts[class_name] = int(row['count'])
     
     # Count relationships by predicate type using SPARQL
@@ -477,8 +225,7 @@ def get_building_summary() -> Dict[str, Any]:
     relationship_counts = {}
     for row in g.query(relationship_query):
         pred_str = str(row.predicate)
-        # todo: prefix namespaces
-        pred_name = pred_str        
+        pred_name = convert_to_prefixed(row.predicate, g)
         relationship_counts[pred_name] = int(row['count'])
     
     # Count literals by predicate and datatype using SPARQL
@@ -498,11 +245,12 @@ def get_building_summary() -> Dict[str, Any]:
     literal_counts = {}
     for row in g.query(literal_query):
         pred_str = str(row.object)
-        datatype_str = str(row.datatype) if row.datatype else "plain"
+        datatype_str = convert_to_prefixed(row.datatype, g) if row.datatype else "plain"
         key = f"{pred_str} ({datatype_str})"
         literal_counts[key] = int(row['count'])
     
     # Apply percentile filtering if requested
+    prefixes = []
     if percentile > 0.0:
         # Filter classes by percentile
         if class_counts:
@@ -517,18 +265,28 @@ def get_building_summary() -> Dict[str, Any]:
             percentile_index = int(len(rel_values) * percentile)
             rel_threshold = rel_values[percentile_index] if percentile_index < len(rel_values) else 0
             relationship_counts = {k: v for k, v in relationship_counts.items() if v > rel_threshold}
-        
+
         # Filter literals by percentile
         if literal_counts:
             lit_values = sorted(literal_counts.values())
             percentile_index = int(len(lit_values) * percentile)
             lit_threshold = lit_values[percentile_index] if percentile_index < len(lit_values) else 0
             literal_counts = {k: v for k, v in literal_counts.items() if v > lit_threshold}
-    
+        
+    classes = [k for k in class_counts.keys()][:top_n]
+    relationships = [k for k in relationship_counts.keys()][:top_n]
+    literals = [k for k in literal_counts.keys()][:top_n]
+
+    for k in classes + relationships:
+        prefixes.append(str(k).split(":")[0])
+
+    namespaces = {pre: str(ns) for pre, ns in parsed_graph.namespace_manager.namespaces() if str(pre) in prefixes}
+
     return {
-        "classes": [k for k in class_counts.keys()][:top_n],
-        "relationships": [k for k in relationship_counts.keys()][:top_n],
-        "literals": [k for k in literal_counts.keys()][:top_n]
+        # 'prefixes': namespaces,
+        "classes": classes,
+        "relationships": relationships,
+        "literals": literals,
     }
 
 def add_limit_to_sparql(query: str, limit: int = 1000) -> str:
@@ -550,6 +308,37 @@ def add_limit_to_sparql(query: str, limit: int = 1000) -> str:
     
     return query
 
+def add_prefixes_to_sparql(query: str, graph) -> str:
+    """Add PREFIX declarations before the SELECT portion of a SPARQL query string.
+    
+    Args:
+        query: SPARQL query string (may or may not already have prefixes)
+        graph: RDF graph with namespace bindings
+    
+    Returns:
+        Query string with prefixes added after any existing prefixes
+    """
+    import re
+    
+    query = query.strip()
+    
+    # Get prefixes from the graph
+    prefixes = get_prefixes(graph)
+    
+    # Check if query already has PREFIX declarations
+    # Match PREFIX lines at the start of the query
+    existing_prefix_pattern = r'^(\s*PREFIX\s+\w+:\s*<[^>]+>\s*\n?)+'
+    match = re.match(existing_prefix_pattern, query, re.IGNORECASE | re.MULTILINE)
+    
+    if match:
+        # Query already has prefixes, add new ones after them
+        existing_prefixes = query[:match.end()]
+        query_remainder = query[match.end():].strip()
+        return f"{existing_prefixes}{prefixes}\n{query_remainder}"
+    else:
+        # No existing prefixes, add them before the query
+        return f"{prefixes}\n{query}"
+
 @mcp.tool()
 def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     """
@@ -570,13 +359,13 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     top_n = 20
     g, parsed_graph = _ensure_graph_loaded()
     class_uri = URIRef(klass)
-    include_subclasses = True # may not want this all the time
+    include_subclasses = False # may not want this all the time
     # Check if the class exists in the ontology
     if (class_uri, RDF.type, None) not in ontology and \
        (class_uri, RDFS.subClassOf, None) not in ontology:
         return {
             "summary": f"Warning: '{klass}' may not be a valid class in the ontology.",
-            "class_searched": f"{klass}",
+            "class_searched": convert_to_prefixed(klass, parsed_graph),
             "entities": [],
             "count": 0,
             "include_subclasses": include_subclasses
@@ -596,8 +385,8 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
         for target_class in subclasses:
             for entity in parsed_graph.subjects(RDF.type, target_class):
                 entity_info = {
-                    "uri": str(entity),
-                    "class": str(target_class)
+                    "uri": convert_to_prefixed(str(entity), parsed_graph),
+                    # "class": convert_to_prefixed(str(target_class), parsed_graph)
                 }
                 
                 # Try to get a label
@@ -614,8 +403,8 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
         # Only find direct instances
         for entity in parsed_graph.subjects(RDF.type, class_uri):
             entity_info = {
-                "uri": str(entity),
-                "class": f"{klass}"
+                "uri": convert_to_prefixed(str(entity), parsed_graph),
+                # "class": convert_to_prefixed(klass, parsed_graph)
             }
             
             # Try to get a label
@@ -644,14 +433,14 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     
     return {
         # "summary": summary,
-        "class_searched": f"{klass}",
+        "class_searched": convert_to_prefixed(klass, parsed_graph),
         "entities": unique_entities[:top_n],
         # "count": len(unique_entities),
         # "include_subclasses": include_subclasses
     }
 
-def _format_rdflib_results(qres) -> Dict[str, Any]:
-    """Converts rdflib QueryResult to the same dict format as SPARQLWrapper."""
+def _format_rdflib_results(qres, graph=None) -> Dict[str, Any]:
+    """Converts rdflib QueryResult to the same dict format as SPARQLWrapper with prefixed URIs."""
     variables = [str(v) for v in qres.vars]
     bindings = []
     for row in qres:
@@ -663,11 +452,17 @@ def _format_rdflib_results(qres) -> Dict[str, Any]:
             
             term_dict = {}
             if isinstance(term, URIRef):
-                term_dict = {'type': 'uri', 'value': str(term)}
+                if graph is not None:
+                    term_dict = {'type': 'uri', 'value': convert_to_prefixed(str(term), graph)}
+                else:
+                    term_dict = {'type': 'uri', 'value': str(term)}
             elif isinstance(term, Literal):
                 term_dict = {'type': 'literal', 'value': str(term)}
                 if term.datatype:
-                    term_dict['datatype'] = str(term.datatype)
+                    if graph is not None:
+                        term_dict['datatype'] = convert_to_prefixed(str(term.datatype), graph)
+                    else:
+                        term_dict['datatype'] = str(term.datatype)
                 if term.language:
                     term_dict['xml:lang'] = term.language
             elif isinstance(term, BNode):
@@ -679,6 +474,39 @@ def _format_rdflib_results(qres) -> Dict[str, Any]:
     return {"results": bindings, "variables": variables}
 def _timeout_handler(signum, frame):
     raise TimeoutError("SPARQL query timed out after 60 seconds")
+
+@mcp.tool()
+def get_sparql_prefixes() -> str:
+    """
+    Retrieve all prefixes and their associated namespaces for the current graph.
+    
+    When to use:
+    - To understand what prefixes are available for SPARQL queries
+    - To help construct SPARQL queries with correct prefixes
+    - To understand the ontology structure
+    
+    Returns:
+        Dictionary of prefixes and their namespaces
+    """
+    g, parsed_graph = _ensure_graph_loaded()
+    prefixes = []
+    for s,p,o in g:
+        if isinstance(s, URIRef):
+            prefixes.append(convert_to_prefixed(s,g).split(":")[0])
+        if isinstance(p, URIRef):
+            prefixes.append(convert_to_prefixed(p,g).split(":")[0])
+        if isinstance(o, URIRef):
+            prefixes.append(convert_to_prefixed(o,g).split(":")[0])
+
+    pre_ns_list = []
+    for pre, ns in parsed_graph.namespace_manager.namespaces():
+        if pre in prefixes:
+            pre_ns_list.append((pre, ns))
+
+    return "\n".join(
+        f"PREFIX {prefix}: <{namespace}>"
+        for prefix, namespace in pre_ns_list
+    )
 
 @mcp.tool()
 def sparql_snapshot(query: str) -> Dict[str, Any]:
@@ -703,19 +531,20 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
         Top 3 query results with bindings for each variable
     """
     result_length = 3
+    g, parsed_graph = _ensure_graph_loaded()
     # Set alarm for timeout
     signal.signal(signal.SIGALRM, _timeout_handler)
     signal.alarm(60)  # 60 seconds timeout
+    # query = add_prefixes_to_sparql(query, parsed_graph)
     input_query = query
     try:
         print(f"\n🔎 Getting SPARQL Snapshot")
-        print(input_query)
         query = add_limit_to_sparql(query, limit=result_length)
         g, parsed_graph = _ensure_graph_loaded()
         prefixes = get_prefixes(parsed_graph)
         full_query = prefixes + "\n" + query
         qres = parsed_graph.query(full_query)
-        formatted_results = _format_rdflib_results(qres)
+        formatted_results = _format_rdflib_results(qres, parsed_graph)
         bindings = formatted_results["results"][:result_length]
         summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
         if not bindings:
@@ -781,8 +610,9 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     """
     # Set alarm for timeout
     signal.signal(signal.SIGALRM, _timeout_handler)
-    signal.alarm(60)  # 60 seconds timeout
-    input_query = query
+    signal.alarm(600)  # 60 seconds timeout
+    g, parsed_graph = _ensure_graph_loaded()
+    # query = add_prefixes_to_sparql(query, parsed_graph)
     try:
         # print(f"\n🔎 Running SPARQL query... (first 80 chars: {query[:80].replace(chr(10), ' ')}...)")
         print(f"\n🔎 Running SPARQL query...")
@@ -790,13 +620,12 @@ def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
         if result_length >= 1:
             query = add_limit_to_sparql(query, limit=result_length)
         else:
-            query = add_limit_to_sparql(query, limit=1000)
-        g, parsed_graph = _ensure_graph_loaded()
+            query = add_limit_to_sparql(query, limit=5000)
         prefixes = get_prefixes(parsed_graph)
         full_query = prefixes + "\n" + query
         print('Running query on parsed graph...')
         qres = parsed_graph.query(full_query)
-        formatted_results = _format_rdflib_results(qres)
+        formatted_results = _format_rdflib_results(qres, parsed_graph)
         bindings = formatted_results["results"][:result_length]
         summary = f"Query executed successfully on local graph. Found {len(bindings)} results."
         if not bindings:
@@ -908,13 +737,12 @@ def get_relationship_between_classes(
     
     if result["found"]:
         # Prepend start class and append end class to the path
-        full_path = [str(start_class)] + result["path"] + [str(end_class)]
-        full_predicates = ["^rdf:type"] + result["predicates"] + ["rdf:type"]
+        full_path = [convert_to_prefixed(start_class, parsed_graph)] + [convert_to_prefixed(p, parsed_graph) for p in result["path"]] + [convert_to_prefixed(end_class, parsed_graph)]
+        full_predicates = ["^rdf:type"] + [convert_to_prefixed(p, parsed_graph) for p in result["predicates"]] + ["rdf:type"]
         
         path_str = " -> ".join(full_path)
         pred_str = " -> ".join(full_predicates)
         summary = (
-            f"Found path of length {len(full_path) - 1} from {start_class_uri} to {end_class_uri}.\n"
             f"Path: {path_str}\n"
             f"Predicates: {pred_str}"
         )
@@ -1260,7 +1088,7 @@ def _ensure_uri_finder_loaded():
 def fuzzy_search_concept(
     query: str,
     search_type: typeLiteral["both", "classes", "predicates"] = "both",
-    n_results: int = 5
+    n_results: int = 10
 ) -> Dict[str, Any]:
     """
     Find classes or predicates that match the search query using semantic similarity.
@@ -1275,7 +1103,7 @@ def fuzzy_search_concept(
                     - "both": Search both classes and predicates (default)
                     - "classes": Search only classes
                     - "predicates": Search only predicates
-        n_results: Number of similar results to return (default: 5)
+        n_results: Number of similar results to return (default: 10)
     
     Returns:
         Dictionary containing:
@@ -1303,7 +1131,7 @@ def fuzzy_search_concept(
             search_type=search_type,
             n_results=n_results
         )
-        match_uri_list = [dct['uri'] for dct in matches]
+        match_uri_list = [convert_to_prefixed(dct['uri'], parsed_graph) for dct in matches]
         return {
             "matches": match_uri_list,
         }
