@@ -20,6 +20,11 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.usage import UsageLimits, UsageLimitExceeded
 from pydantic_ai.mcp import MCPServerStdio
 from pydantic_ai.toolsets.fastmcp import FastMCPToolset
+from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
+from httpx import AsyncClient, HTTPStatusError
+from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
+
+
 from pyparsing import ParseException
 from rdflib import BNode, Graph, Literal, URIRef
 from SPARQLWrapper import JSON, SPARQLWrapper
@@ -43,6 +48,33 @@ from agents.kgqa import sparql_query, mcp, toolset1_mcp
 RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
 # RUN_UNTIL_RESULTS = False # Just a single pass 
 
+def create_retrying_client():
+    """Create a client with smart retry handling for multiple error types."""
+
+    def should_retry_status(response):
+        """Raise exceptions for retryable HTTP status codes."""
+        if response.status_code in (429, 502, 503, 504):
+            response.raise_for_status()  # This will raise HTTPStatusError
+
+    transport = AsyncTenacityTransport(
+        config=RetryConfig(
+            # Retry on HTTP errors and connection issues
+            retry=retry_if_exception_type((HTTPStatusError, ConnectionError)),
+            # Smart waiting: respects Retry-After headers, falls back to exponential backoff
+            wait=wait_retry_after(
+                fallback_strategy=wait_exponential(multiplier=1, max=60),
+                max_wait=300
+            ),
+            # Stop after 5 attempts
+            stop=stop_after_attempt(5),
+            # Re-raise the last exception if all retries fail
+            reraise=True
+        ),
+        validate_response=should_retry_status
+    )
+    return AsyncClient(transport=transport)
+
+
 class SparqlQuery(BaseModel):
     """Model for the agent's output."""
     sparql_query: str = Field(..., description="The generated SPARQL query.")
@@ -60,7 +92,7 @@ class SimpleSparqlAgentMCP:
         parsed_graph_file: str,
         model_name: str = "lbl/cborg-coder",
         max_tool_calls: int = 30,
-        max_iterations: int = 3,
+        max_iterations: int = 5,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
@@ -128,26 +160,30 @@ class SimpleSparqlAgentMCP:
         os.environ['GRAPH_FILE'] = self.sparql_endpoint_url
         os.environ['PARSED_GRAPH_FILE'] = self.parsed_graph_file
         # Set up the model
+        client = create_retrying_client()
+
         self.model = OpenAIModel(
             model_name=self.model_name,
-            provider=OpenAIProvider(base_url=self.base_url, api_key=self.api_key),
+            provider=OpenAIProvider(base_url=self.base_url, api_key=self.api_key, http_client = client),
         )
 
+        
         self.limits = UsageLimits(total_tokens_limit = 100000, request_limit = 20)
 
         recommended_tool_calls = self.max_tool_calls // 3
         system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223. \n"
-            f"Your job is to write a single, complete SPARQL query to answer the user's request. "
-            f"An example workflow using the available tools may be:\n"
-            f"1) use get_building_summary to understand the building model,\n"
-            f"2) use get_relationship_between_classes to find predicate paths between classes,\n"
-            f"3) look at sparql_snapshots to construct a final query.\n"
-            f"If the query is incorrect, you may use describe_entity to understand entities better.\n"
-            f"If you are unsure about how many projections to return, return more rather than fewer. "
-            # f"ONCE YOU HAVE GENERATED A SUCCESSFUL QUERY THAT ANSWERS THE USER REQUEST, PROVIDE YOUR FINAL ANSWER.\n"
-            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
-        )
+            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223.\n\n"
+            f"WORKFLOW - Follow these steps in order:\n"
+            f"Step 1: Call get_building_summary to understand the building model\n"
+            f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
+            f"Step 3: Review sparql_snapshots for similar query patterns\n"
+            f"Step 4: Construct your SPARQL query based on the information gathered\n"
+            f"Step 5: If query fails, call describe_entity on problematic entities\n\n"
+            f"IMPORTANT: You must call tools to gather information before writing the query. "
+            f"Do not guess - use the tools to verify entity names, relationships, and patterns.\n\n"
+            f"When returning projections, include more variables rather than fewer.\n"
+            f"Maximum tool calls available: {self.max_tool_calls}\n"
+            )
 
         self.agent = Agent(
             self.model,
@@ -213,7 +249,14 @@ class SimpleSparqlAgentMCP:
 
         print(f"\n🚀 Generating query for: '{nl_question}'")
 
-        user_message = f"Question: {nl_question}"
+        user_message = (
+            f"Question: {nl_question}\n\n"
+            f"Before writing the query:\n"
+            f"1. First, tell me what tools you need to call and why\n"
+            f"2. Then call those tools\n"
+            f"3. Finally, construct the SPARQL query based on the tool results\n\n"
+            f"Think step-by-step and use the available tools."
+        )
         try:
             self.all_previous_messages = []
             all_messages = []
@@ -334,10 +377,15 @@ class SimpleSparqlAgentMCP:
             pred_rows = gen_results_obj["results"]
             
             arity_f1 = get_arity_matching_f1(generated_query, ground_truth_sparql)
+            print('calculated arity f1:', arity_f1)
             entity_set_f1 = get_entity_set_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            print('calculated entity set f1:', entity_set_f1)
             row_matching_f1 = get_row_matching_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            print('calculated row matching f1:', row_matching_f1)
             exact_match_f1 = get_exact_match_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            print('calculated exact match f1:', exact_match_f1)
             best_subset_column_f1 = get_best_subset_column_f1(gold_rows=gold_rows, pred_rows=pred_rows)
+            print('calculated best subset column f1:', best_subset_column_f1)
             less_columns_flag = gen_results_obj['col_count'] < gt_results_obj['col_count']
         
         log_entry = {
