@@ -37,7 +37,7 @@ from scripts.metrics import (
 
 from scripts.utils import CsvLogger
 
-from agents.kgqa import sparql_query, mcp
+from agents.kgqa import sparql_query, mcp, toolset1_mcp
 
 
 # RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
@@ -88,7 +88,8 @@ class SimpleSparqlAgentMCP:
         self.total_tokens = 0
         self.messages = []
         self.max_iterations = max_iterations
-        self.toolset = FastMCPToolset(mcp)
+        # self.toolset = FastMCPToolset(mcp)
+        self.toolset = FastMCPToolset(toolset1_mcp)
 
         # Load API credentials
         if api_key:
@@ -269,7 +270,7 @@ class SimpleSparqlAgentMCP:
             print(f"❌ Query generation failed: {e}")
             self.all_previous_messages += [str(msg) for msg in messages]
             traceback.print_exc()
-            generated_query = os.getenv("LAST_GENERATED_QUERY")
+            generated_query = os.getenv("LAST_SPARQL_QUERY")
 
         if not generated_query:
             if tool_calls_exceeded:

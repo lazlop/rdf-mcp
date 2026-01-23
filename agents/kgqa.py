@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK
 
 mcp = FastMCP("GraphDemo")
+toolset1_mcp = FastMCP("t1")
 print("loaded mcp")
 
 # Define namespaces to exclude from shortest path search
@@ -106,7 +107,7 @@ def _format_term(term) -> Dict[str, Any]:
 #     Returns:
 #         List of matching subjects with their types
 #     """
-#     g = _ensure_graph_loaded()
+#     g, parsed_g = _ensure_graph_loaded()
     
 #     # Convert string inputs to RDF terms
 #     pred = URIRef(predicate) if predicate else None
@@ -149,7 +150,7 @@ def _format_term(term) -> Dict[str, Any]:
 #     Returns:
 #         List of matching predicates
 #     """
-#     g = _ensure_graph_loaded()
+#     g, parsed_g = _ensure_graph_loaded()
     
 #     # Convert string inputs to RDF terms
 #     subj = URIRef(subject) if subject else None
@@ -192,7 +193,7 @@ def _format_term(term) -> Dict[str, Any]:
 #     Returns:
 #         List of matching objects with their types
 #     """
-#     g = _ensure_graph_loaded()
+#     g, parsed_g = _ensure_graph_loaded()
     
 #     # Convert string inputs to RDF terms
 #     subj = URIRef(subject) if subject else None
@@ -233,7 +234,7 @@ def _format_term(term) -> Dict[str, Any]:
 #     Returns:
 #         List of (subject, predicate) pairs
 #     """
-#     g = _ensure_graph_loaded()
+#     g, parsed_g = _ensure_graph_loaded()
     
 #     # Convert string input to RDF term
 #     obj = URIRef(object) if object and object.startswith('http') else (Literal(object) if object else None)
@@ -276,7 +277,7 @@ def _format_term(term) -> Dict[str, Any]:
 #     Returns:
 #         List of (predicate, object) pairs
 #     """
-#     g = _ensure_graph_loaded()
+#     g, parsed_g = _ensure_graph_loaded()
     
 #     # Convert string input to RDF term
 #     subj = URIRef(subject) if subject else None
@@ -319,7 +320,7 @@ def _format_term(term) -> Dict[str, Any]:
 #     Returns:
 #         List of (subject, object) pairs
 #     """
-#     g = _ensure_graph_loaded()
+#     g, parsed_g = _ensure_graph_loaded()
     
 #     # Convert string input to RDF term
 #     pred = URIRef(predicate) if predicate else None
@@ -723,7 +724,6 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
         else:
             print(f"   -> Retrieved {len(bindings)} results.")
             os.environ["LAST_SPARQL_QUERY"] = input_query
-            print(input_query)
             print(bindings)
         return {
             "summary_string": summary,
@@ -757,8 +757,8 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
     finally:
         signal.alarm(0)
 
-# @mcp.tool()
-def sparql_query(query: str, result_length: int = 3) -> Dict[str, Any]:
+@toolset1_mcp.tool()
+def sparql_query(query: str, result_length: int = 10) -> Dict[str, Any]:
     """
     Execute custom SPARQL queries for complex questions that other tools cannot answer.
     Only use this for multi-step reasoning, filtering, or complex graph patterns.
@@ -774,7 +774,7 @@ def sparql_query(query: str, result_length: int = 3) -> Dict[str, Any]:
     
     Args:
         query: SPARQL SELECT query (prefixes will be added automatically)
-        result_length: Maximum results to return (default: 3)
+        result_length: Maximum results to return (default: 10)
     
     Returns:
         Query results with bindings for each variable
@@ -1314,3 +1314,265 @@ def fuzzy_search_concept(
         return {
             "error": f"Search failed: {str(e)}",
         }
+    
+
+
+@toolset1_mcp.tool()
+def describe_entity(
+    entity: str | URIRef,
+) -> str:
+    """
+    Describe an entity by extracting its local subgraph.
+    """
+    g, parsed_g = _ensure_graph_loaded() 
+
+    # using parsed graphs for this toolset 
+    g = parsed_g
+
+    # originally were args
+    num_hops = 1
+    get_classes = True
+    
+    # Convert string to URIRef
+    if isinstance(entity, str):
+        central_uri = URIRef(entity)
+    
+    subgraph = Graph(store='Oxigraph')
+    
+    visited_nodes = set()
+    current_layer = {central_uri}
+    
+    for class_uri in g.objects(central_uri, RDF.type): 
+        subgraph.add((central_uri, RDF.type, class_uri))
+    
+    for hop in range(num_hops):
+        next_layer = set()
+        
+        for node in current_layer:
+            if node in visited_nodes:
+                continue
+            visited_nodes.add(node)
+            
+            for p, o in g.predicate_objects(node): 
+                subgraph.add((node, p, o))
+                if isinstance(o, URIRef):
+                    next_layer.add(o)
+                    for class_uri in g.objects(o, RDF.type): 
+                        subgraph.add((o, RDF.type, class_uri))
+            
+            for s, p in g.subject_predicates(node): 
+                subgraph.add((s, p, node))
+                if isinstance(s, URIRef):
+                    next_layer.add(s)
+                    for class_uri in g.objects(s, RDF.type): 
+                        subgraph.add((s, RDF.type, class_uri))
+        
+        current_layer = next_layer
+    
+    if get_classes:
+        for s, p, o in subgraph:
+            for class_uri in g.objects(s, RDF.type): 
+                subgraph.add((s, RDF.type, class_uri))
+            for class_uri in g.objects(o, RDF.type): 
+                subgraph.add((o, RDF.type, class_uri))
+    
+    return subgraph.serialize(format="turtle")
+
+@toolset1_mcp.tool()
+def get_building_summary() -> Dict[str, Any]:
+    """
+    Get a summary of the building model including:
+    - All Brick classes present and their counts
+    - All relationship types (predicates) and their counts
+    
+    Returns a structured overview of what's in the building model.
+    """
+    g, parsed_g = _ensure_graph_loaded()
+    g = parsed_g
+    # Count entities by Brick class using SPARQL
+    class_query = """
+    PREFIX brick: <https://brickschema.org/schema/Brick#>
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    
+    SELECT ?class (COUNT(?entity) as ?count)
+    WHERE {
+        ?entity rdf:type ?class .
+    }
+    GROUP BY ?class
+    ORDER BY DESC(?count)
+    """
+    
+    class_counts = {}
+    for row in g.query(class_query):
+        class_name = str(row['class'])# .replace(str(BRICK), "brick:")
+        class_counts[class_name] = int(row['count'])
+    
+    # Count relationships by predicate type using SPARQL
+    relationship_query = """
+    PREFIX brick: <https://brickschema.org/schema/Brick#>
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    
+    SELECT ?predicate (COUNT(*) as ?count)
+    WHERE {
+        ?subject ?predicate ?object .
+        FILTER(?predicate != rdf:type)
+    }
+    GROUP BY ?predicate
+    ORDER BY DESC(?count)
+    """
+    
+    relationship_counts = {}
+    for row in g.query(relationship_query):
+        pred_str = str(row.predicate)
+        # todo: prefix namespaces
+        pred_name = pred_str        
+        relationship_counts[pred_name] = int(row['count'])
+    
+    summary = (
+        f"Building model contains {len(g)} total triples, "
+        f"{len(class_counts)} distinct Brick classes, "
+        f"and {len(relationship_counts)} distinct relationship types."
+    )
+    
+    return {
+        "summary": summary,
+        "total_triples": len(g),
+        "class_counts": class_counts,
+        "relationship_counts": relationship_counts,
+        "total_classes": len(class_counts),
+        "total_relationship_types": len(relationship_counts)
+    }
+
+@toolset1_mcp.tool()
+def find_entities_by_type(brick_class: str, include_subclasses: bool = True) -> Dict[str, Any]:
+    """
+    Find all entities of a given class type.
+    
+    Args:
+        brick_class: The Brick class name (e.g., 'VAV', 'Temperature_Sensor', 'Air_Handling_Unit')
+                    Can be provided with or without 'brick:' prefix
+        include_subclasses: If True, also returns entities of subclasses (default: True)
+    
+    Returns:
+        List of all matching entities with their URIs and labels (if available)
+    """
+    g, parsed_g = _ensure_graph_loaded()
+    g = parsed_g
+    # todo: handle namespaces better
+    # if brick_class.startswith("brick:"):
+    #     brick_class = brick_class.replace("brick:", "")
+    # elif brick_class.startswith(str(BRICK)):
+    #     brick_class = brick_class.replace(str(BRICK), "")
+    
+    # Create the class URI
+    class_uri = BRICK[brick_class]
+    
+    # Check if the class exists in the Brick ontology
+    if (class_uri, RDF.type, None) not in ontology and \
+       (class_uri, RDFS.subClassOf, None) not in ontology:
+        return {
+            "summary": f"Warning: '{brick_class}' may not be a valid Brick class",
+            "class_searched": f"{brick_class}",
+            "entities": [],
+            "count": 0,
+            "include_subclasses": include_subclasses
+        }
+    
+    entities = []
+    
+    if include_subclasses:
+        # Get all subclasses of the target class from the ontology
+        subclasses = set([class_uri])
+        
+        # Query for transitive subclasses
+        for subclass in ontology.transitive_subjects(RDFS.subClassOf, class_uri):
+            subclasses.add(subclass)
+        
+        # Find all entities that are instances of any of these classes
+        for target_class in subclasses:
+            for entity in g.subjects(RDF.type, target_class):
+                entity_info = {
+                    "uri": str(entity),
+                    "class": str(target_class) #.replace(str(BRICK), "brick:")
+                }
+                
+                # Try to get a label
+                label = None
+                for lbl in g.objects(entity, RDFS.label):
+                    label = str(lbl)
+                    break
+                
+                if label:
+                    entity_info["label"] = label
+                
+                entities.append(entity_info)
+    else:
+        # Only find direct instances
+        for entity in g.subjects(RDF.type, class_uri):
+            entity_info = {
+                "uri": str(entity),
+                "class": f"{brick_class}"
+            }
+            
+            # Try to get a label
+            label = None
+            for lbl in g.objects(entity, RDFS.label):
+                label = str(lbl)
+                break
+            
+            if label:
+                entity_info["label"] = label
+            
+            entities.append(entity_info)
+    
+    # Remove duplicates (can happen with multiple class assertions)
+    seen_uris = set()
+    unique_entities = []
+    for entity in entities:
+        if entity["uri"] not in seen_uris:
+            seen_uris.add(entity["uri"])
+            unique_entities.append(entity)
+    
+    summary = (
+        f"Found {len(unique_entities)} entities of type {brick_class}"
+        f"{' (including subclasses)' if include_subclasses else ''}"
+    )
+    
+    return {
+        "summary": summary,
+        "class_searched": f"{brick_class}",
+        "entities": unique_entities,
+        "count": len(unique_entities),
+        "include_subclasses": include_subclasses
+    }
+
+def _format_rdflib_results(qres) -> Dict[str, Any]:
+    """Converts rdflib QueryResult to the same dict format as SPARQLWrapper."""
+    variables = [str(v) for v in qres.vars]
+    bindings = []
+    for row in qres:
+        binding_row = {}
+        for var_name in variables:
+            term = row[var_name]
+            if term is None:
+                continue
+            
+            term_dict = {}
+            if isinstance(term, URIRef):
+                term_dict = {'type': 'uri', 'value': str(term)}
+            elif isinstance(term, Literal):
+                term_dict = {'type': 'literal', 'value': str(term)}
+                if term.datatype:
+                    term_dict['datatype'] = str(term.datatype)
+                if term.language:
+                    term_dict['xml:lang'] = term.language
+            elif isinstance(term, BNode):
+                term_dict = {'type': 'bnode', 'value': str(term)}
+            
+            binding_row[var_name] = term_dict
+        bindings.append(binding_row)
+    
+    return {"results": bindings, "variables": variables}
+def _timeout_handler(signum, frame):
+    raise TimeoutError("SPARQL query timed out after 60 seconds")
