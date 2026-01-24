@@ -181,7 +181,7 @@ class SimpleSparqlAgentMCP:
         
         self.limits = UsageLimits(total_tokens_limit = self.total_tokens_limit, request_limit = self.max_tool_calls)
 
-        recommended_tool_calls = self.max_tool_calls // 3
+        recommended_tool_calls = self.max_tool_calls // 5
         system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223.\n\n"
             f"WORKFLOW - Follow these steps in order:\n"
@@ -198,18 +198,12 @@ class SimpleSparqlAgentMCP:
 
         if reasoning_model:
             system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223.\n\n"
-            f"Your task is to generate a complete SPARQL query to answer the user's question. "
-            f"WORKFLOW - Follow these steps:\n"
-            f"Step 1: Call get_building_summary to understand the building model\n"
-            f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
-            f"Step 3: Review sparql_snapshots to develop query patterns\n"
-            f"Step 4: Construct your SPARQL query based on the information gathered\n"
-            f"Step 5: If query fails, call describe_entity on problematic entities\n\n"
-            f"IMPORTANT: You must call tools to gather information before writing the query. "
-            f"When returning projections, include more columns rather than fewer.\n"
-            f"Maximum tool calls available: {self.max_tool_calls}\n"
-            )
+            f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
+            f"Generate a complete SPARQL query to answer the user's question. "
+            f"You can use the provided MCP tools to generate the query."
+            f"Use the sparql_snapshot tool to ensure the final query is correct before returning the final result."
+            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
+        )
 
         self.agent = Agent(
             self.model,
@@ -301,10 +295,10 @@ class SimpleSparqlAgentMCP:
                         recommended_tool_calls = self.max_tool_calls // 3
                         execution_prompt = (
                             f"Question: {nl_question}\n\n"
-                            f"Generate a SPARQL query to answer the user question. \n"
-                            f"Use the tools available to gather necessary information before constructing the query. \n"
-                            f"Return the complete SPARQL query. \n"
-                            f"IMPORTANT - when you have gathered enough information, return the SPARQL query. \n"                            
+                            # f"Generate a SPARQL query to answer the user question. \n"
+                            # f"Use the tools available to gather necessary information before constructing the query. \n"
+                            # f"Return the complete SPARQL query. \n"
+                            # f"IMPORTANT - when you have gathered enough information, return the SPARQL query. \n"                            
                         )
                     else:
                         execution_prompt = (

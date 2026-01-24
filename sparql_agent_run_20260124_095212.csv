@@ -1,0 +1,121 @@
+query_id,question_number,source,question,model,message_history,ground_truth_sparql,generated_sparql,syntax_ok,returns_results,perfect_match,gt_num_rows,gt_num_cols,gen_num_rows,gen_num_cols,arity_matching_f1,exact_match_f1,entity_set_f1,row_matching_f1,less_columns_flag,prompt_tokens,completion_tokens,total_tokens,best_column_entity_f1,best_column_row_f1
+DFLEXLIBS_001,,,"For each HVAC zone in the building, what are the timeseries IDs for the available zone temperature sensor' points, min and max temperature setpoints, temperature setpoints (single, heating/cooling or occupied/unoccupied), occupancy sensors and commands, and any related VAV damper, discharge temperature, and reheat command points?",lbl/cborg-coder,"ModelRequest(parts=[UserPromptPart(content=""Question: For each HVAC zone in the building, what are the timeseries IDs for the available zone temperature sensor' points, min and max temperature setpoints, temperature setpoints (single, heating/cooling or occupied/unoccupied), occupancy sensors and commands, and any related VAV damper, discharge temperature, and reheat command points?"", timestamp=datetime.datetime(2026, 1, 24, 17, 52, 14, 407797, tzinfo=datetime.timezone.utc), part_kind='user-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[TextPart(content='{\n  ""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.2/Brick#>\\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\\nPREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\\n\\nSELECT ?zone ?zoneLabel\\n       ?tempSensorId ?minSetpointId ?maxSetpointId\\n       ?heatSetpointId ?coolSetpointId ?occupiedSetpointId ?unoccupiedSetpointId\\n       ?occupancySensorId ?occupancyCommandId\\n       ?vav ?damperId ?dischargeTempId ?reheatCmdId\\nWHERE {\\n  # ---- HVAC zones -------------------------------------------------------\\n  ?zone a brick:HVAC_Zone .\\n  OPTIONAL { ?zone rdfs:label ?zoneLabel . }\\n\\n  # ---- Zone temperature sensor ------------------------------------------\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?tempSensor .\\n    ?tempSensor a brick:Temperature_Sensor .\\n    OPTIONAL { ?tempSensor brick:hasTimeseriesId ?tempSensorId . }\\n  }\\n\\n  # ---- Min / Max temperature setpoints ---------------------------------\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?minSet .\\n    ?minSet a brick:Min_Temperature_Setpoint .\\n    OPTIONAL { ?minSet brick:hasTimeseriesId ?minSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?maxSet .\\n    ?maxSet a brick:Max_Temperature_Setpoint .\\n    OPTIONAL { ?maxSet brick:hasTimeseriesId ?maxSetpointId . }\\n  }\\n\\n  # ---- Temperature setpoints (heating / cooling / occupied / unoccupied) -----\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?heatSet .\\n    ?heatSet a brick:Heating_Temperature_Setpoint .\\n    OPTIONAL { ?heatSet brick:hasTimeseriesId ?heatSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?coolSet .\\n    ?coolSet a brick:Cooling_Temperature_Setpoint .\\n    OPTIONAL { ?coolSet brick:hasTimeseriesId ?coolSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?occupiedSet .\\n    ?occupiedSet a brick:Occupied_Temperature_Setpoint .\\n    OPTIONAL { ?occupiedSet brick:hasTimeseriesId ?occupiedSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?unoccupiedSet .\\n    ?unoccupiedSet a brick:Unoccupied_Temperature_Setpoint .\\n    OPTIONAL { ?unoccupiedSet brick:hasTimeseriesId ?unoccupiedSetpointId . }\\n  }\\n\\n  # ---- Occupancy sensor and command -------------------------------------\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?occSensor .\\n    ?occSensor a brick:Occupancy_Sensor .\\n    OPTIONAL { ?occSensor brick:hasTimeseriesId ?occupancySensorId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?occCommand .\\n    ?occCommand a brick:Occupancy_Command .\\n    OPTIONAL { ?occCommand brick:hasTimeseriesId ?occupancyCommandId . }\\n  }\\n\\n  # ---- VAV serving the zone and its associated points -------------------\\n  OPTIONAL {\\n    ?vav a brick:VAV .\\n    ?vav brick:feeds ?zone .\\n    # VAV damper\\n    OPTIONAL {\\n      ?vav brick:hasPoint ?damper .\\n      ?damper a brick:Damper .\\n      OPTIONAL { ?damper brick:hasTimeseriesId ?damperId . }\\n    }\\n    # Discharge air temperature sensor\\n    OPTIONAL {\\n      ?vav brick:hasPoint ?disTemp .\\n      ?disTemp a brick:Discharge_Air_Temperature_Sensor .\\n      OPTIONAL { ?disTemp brick:hasTimeseriesId ?dischargeTempId . }\\n    }\\n    # Reheat command\\n    OPTIONAL {\\n      ?vav brick:hasPoint ?reheatCmd .\\n      ?reheatCmd a brick:Reheat_Command .\\n      OPTIONAL { ?reheatCmd brick:hasTimeseriesId ?reheatCmdId . }\\n    }\\n  }\\n}\\nORDER BY ?zone""\n}', part_kind='text')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 24, 17, 52, 14, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[RetryPromptPart(content='Plain text responses are not permitted, please include your response in a tool call', tool_name=None, tool_call_id='pyd_ai_47bebd194caf4722ab52645b930d424b', timestamp=datetime.datetime(2026, 1, 24, 17, 52, 31, 801388, tzinfo=datetime.timezone.utc), part_kind='retry-prompt')], instructions=None, kind='request')
+ModelResponse(parts=[ToolCallPart(tool_name='final_result', args='{""sparql_query"": ""PREFIX brick: <https://brickschema.org/schema/1.2/Brick#>\\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\\nPREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\\n\\nSELECT ?zone ?zoneLabel\\n       ?tempSensorId ?minSetpointId ?maxSetpointId\\n       ?heatSetpointId ?coolSetpointId ?occupiedSetpointId ?unoccupiedSetpointId\\n       ?occupancySensorId ?occupancyCommandId\\n       ?vav ?damperId ?dischargeTempId ?reheatCmdId\\nWHERE {\\n  # ---- HVAC zones -------------------------------------------------------\\n  ?zone a brick:HVAC_Zone .\\n  OPTIONAL { ?zone rdfs:label ?zoneLabel . }\\n\\n  # ---- Zone temperature sensor ------------------------------------------\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?tempSensor .\\n    ?tempSensor a brick:Temperature_Sensor .\\n    OPTIONAL { ?tempSensor brick:hasTimeseriesId ?tempSensorId . }\\n  }\\n\\n  # ---- Minimum / Maximum temperature setpoints ---------------------------\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?minSet .\\n    ?minSet a brick:Minimum_Temperature_Setpoint .\\n    OPTIONAL { ?minSet brick:hasTimeseriesId ?minSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?maxSet .\\n    ?maxSet a brick:Maximum_Temperature_Setpoint .\\n    OPTIONAL { ?maxSet brick:hasTimeseriesId ?maxSetpointId . }\\n  }\\n\\n  # ---- Temperature setpoints (heating / cooling / occupied / unoccupied) -----\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?heatSet .\\n    ?heatSet a brick:Heating_Temperature_Setpoint .\\n    OPTIONAL { ?heatSet brick:hasTimeseriesId ?heatSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?coolSet .\\n    ?coolSet a brick:Cooling_Temperature_Setpoint .\\n    OPTIONAL { ?coolSet brick:hasTimeseriesId ?coolSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?occupiedSet .\\n    ?occupiedSet a brick:Occupied_Temperature_Setpoint .\\n    OPTIONAL { ?occupiedSet brick:hasTimeseriesId ?occupiedSetpointId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?unoccupiedSet .\\n    ?unoccupiedSet a brick:Unoccupied_Temperature_Setpoint .\\n    OPTIONAL { ?unoccupiedSet brick:hasTimeseriesId ?unoccupiedSetpointId . }\\n  }\\n\\n  # ---- Occupancy sensor and command -------------------------------------\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?occSensor .\\n    ?occSensor a brick:Occupancy_Sensor .\\n    OPTIONAL { ?occSensor brick:hasTimeseriesId ?occupancySensorId . }\\n  }\\n  OPTIONAL {\\n    ?zone brick:hasPoint ?occCommand .\\n    ?occCommand a brick:Occupancy_Command .\\n    OPTIONAL { ?occCommand brick:hasTimeseriesId ?occupancyCommandId . }\\n  }\\n\\n  # ---- VAV serving the zone and its associated points -------------------\\n  OPTIONAL {\\n    ?vav a brick:VAV .\\n    ?vav brick:feeds ?zone .\\n    # VAV damper point (position command or status)\\n    OPTIONAL {\\n      ?vav brick:hasPoint ?damper .\\n      ?damper a brick:Damper .\\n      OPTIONAL { ?damper brick:hasTimeseriesId ?damperId . }\\n    }\\n    # Discharge air temperature sensor\\n    OPTIONAL {\\n      ?vav brick:hasPoint ?disTemp .\\n      ?disTemp a brick:Discharge_Air_Temperature_Sensor .\\n      OPTIONAL { ?disTemp brick:hasTimeseriesId ?dischargeTempId . }\\n    }\\n    # Reheat command point\\n    OPTIONAL {\\n      ?vav brick:hasPoint ?reheatCmd .\\n      ?reheatCmd a brick:Reheat_Command .\\n      OPTIONAL { ?reheatCmd brick:hasTimeseriesId ?reheatCmdId . }\\n    }\\n  }\\n}\\nORDER BY ?zone""}', tool_call_id='chatcmpl-tool-69c02872b5ad4a2e8c8f2c8050876e03', part_kind='tool-call')], model_name='hosted_vllm/hosted_vllm/gpt-oss-120b', timestamp=datetime.datetime(2026, 1, 24, 17, 52, 31, tzinfo=datetime.timezone.utc), kind='response')
+ModelRequest(parts=[ToolReturnPart(tool_name='final_result', content='Final result processed.', tool_call_id='chatcmpl-tool-69c02872b5ad4a2e8c8f2c8050876e03', timestamp=datetime.datetime(2026, 1, 24, 17, 52, 40, 157646, tzinfo=datetime.timezone.utc), part_kind='tool-return')], instructions=None, kind='request')","PREFIX brick: <https://brickschema.org/schema/Brick#>
+PREFIX ref: <https://brickschema.org/schema/Brick/ref#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?zone_name ?zone_temp_point ?set_temp_min_point ?set_temp_max_point ?occ_sensor_point ?occ_cmd_point
+?zone_set_temp_heat_point ?zone_set_temp_cool_point ?unocc_zone_set_temp_heat_point ?unocc_zone_set_temp_cool_point
+?occ_zone_set_temp_heat_point ?occ_zone_set_temp_cool_point ?zone_set_temp_point ?vav_damper_set_point ?vav_discharge_temp_point
+?vav_reheat_command_point
+WHERE {
+    ?zone a brick:HVAC_Zone ; rdfs:label ?zone_name.
+    OPTIONAL { ?zone brick:hasPoint ?TZon. ?TZon a brick:Zone_Air_Temperature_Sensor ; ref:hasExternalReference/ref:hasTimeseriesId ?zone_temp_point .}
+    OPTIONAL { ?zone brick:hasPoint ?TSetMin . ?TSetMin a brick:Min_Air_Temperature_Setpoint ; ref:hasExternalReference/ref:hasTimeseriesId ?set_temp_min_point .}
+    OPTIONAL { ?zone brick:hasPoint ?TSetMax . ?TSetMax a brick:Max_Air_Temperature_Setpoint ; ref:hasExternalReference/ref:hasTimeseriesId ?set_temp_max_point .}
+    OPTIONAL { ?zone brick:hasPoint ?TSetHeaZon . ?TSetHeaZon a brick:Zone_Air_Heating_Temperature_Setpoint; ref:hasExternalReference/ref:hasTimeseriesId ?zone_set_temp_heat_point .}
+    OPTIONAL { ?zone brick:hasPoint ?TSetCooZon . ?TSetCooZon a brick:Zone_Air_Cooling_Temperature_Setpoint; ref:hasExternalReference/ref:hasTimeseriesId ?zone_set_temp_cool_point .}
+    OPTIONAL { ?zone brick:hasPoint ?OccSensor. ?OccSensor a brick:Occupancy_Sensor ; ref:hasExternalReference/ref:hasTimeseriesId ?occ_sensor_point .}
+    OPTIONAL { ?zone brick:hasPoint ?OccCmd . ?OccCmd a brick:Occupancy_Command ; ref:hasExternalReference/ref:hasTimeseriesId ?occ_cmd_point .}
+    OPTIONAL { ?zone brick:hasPoint ?UnOccTSetCooZon. ?UnOccTSetCooZon a brick:Unoccupied_Cooling_Temperature_Setpoint ; ref:hasExternalReference/ref:hasTimeseriesId ?unocc_zone_set_temp_cool_point . }
+    OPTIONAL { ?zone brick:hasPoint ?UnOccTSetHeaZon . ?UnOccTSetHeaZon a brick:Unoccupied_Heating_Temperature_Setpoint; ref:hasExternalReference/ref:hasTimeseriesId ?unocc_zone_set_temp_heat_point .}
+    OPTIONAL { ?zone brick:hasPoint ?OccTSetCooZon . ?OccTSetCooZon a brick:Occupied_Cooling_Temperature_Setpoint; ref:hasExternalReference/ref:hasTimeseriesId ?occ_zone_set_temp_cool_point .}
+    OPTIONAL { ?zone brick:hasPoint ?OccTSetHeaZon . ?OccTSetHeaZon a brick:Occupied_Heating_Temperature_Setpoint ; ref:hasExternalReference/ref:hasTimeseriesId ?occ_zone_set_temp_heat_point . }
+    OPTIONAL { ?zone brick:hasPoint ?TSetZon . ?TSetZon a brick:Zone_Air_Temperature_Setpoint; ref:hasExternalReference/ref:hasTimeseriesId ?zone_set_temp_point .}
+    OPTIONAL { ?vav brick:feeds ?zone ; brick:hasPoint ?Vav_DamSet . ?Vav_DamSet a brick:Damper_Position_Setpoint; ref:hasExternalReference/ref:hasTimeseriesId ?vav_damper_set_point .}
+    OPTIONAL { ?vav brick:feeds ?zone ; brick:hasPoint ?Vav_DisTemp . ?Vav_DisTemp a brick:Discharge_Air_Temperature_Sensor; ref:hasExternalReference/ref:hasTimeseriesId ?vav_discharge_temp_point .}
+    OPTIONAL { ?vav brick:feeds ?zone ; brick:hasPoint ?Vav_ReheatCmd . ?Vav_ReheatCmd a brick:Valve_Command; ref:hasExternalReference/ref:hasTimeseriesId ?vav_reheat_command_point .}
+}","PREFIX brick: <https://brickschema.org/schema/1.2/Brick#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?zone ?zoneLabel
+       ?tempSensorId ?minSetpointId ?maxSetpointId
+       ?heatSetpointId ?coolSetpointId ?occupiedSetpointId ?unoccupiedSetpointId
+       ?occupancySensorId ?occupancyCommandId
+       ?vav ?damperId ?dischargeTempId ?reheatCmdId
+WHERE {
+  # ---- HVAC zones -------------------------------------------------------
+  ?zone a brick:HVAC_Zone .
+  OPTIONAL { ?zone rdfs:label ?zoneLabel . }
+
+  # ---- Zone temperature sensor ------------------------------------------
+  OPTIONAL {
+    ?zone brick:hasPoint ?tempSensor .
+    ?tempSensor a brick:Temperature_Sensor .
+    OPTIONAL { ?tempSensor brick:hasTimeseriesId ?tempSensorId . }
+  }
+
+  # ---- Minimum / Maximum temperature setpoints ---------------------------
+  OPTIONAL {
+    ?zone brick:hasPoint ?minSet .
+    ?minSet a brick:Minimum_Temperature_Setpoint .
+    OPTIONAL { ?minSet brick:hasTimeseriesId ?minSetpointId . }
+  }
+  OPTIONAL {
+    ?zone brick:hasPoint ?maxSet .
+    ?maxSet a brick:Maximum_Temperature_Setpoint .
+    OPTIONAL { ?maxSet brick:hasTimeseriesId ?maxSetpointId . }
+  }
+
+  # ---- Temperature setpoints (heating / cooling / occupied / unoccupied) -----
+  OPTIONAL {
+    ?zone brick:hasPoint ?heatSet .
+    ?heatSet a brick:Heating_Temperature_Setpoint .
+    OPTIONAL { ?heatSet brick:hasTimeseriesId ?heatSetpointId . }
+  }
+  OPTIONAL {
+    ?zone brick:hasPoint ?coolSet .
+    ?coolSet a brick:Cooling_Temperature_Setpoint .
+    OPTIONAL { ?coolSet brick:hasTimeseriesId ?coolSetpointId . }
+  }
+  OPTIONAL {
+    ?zone brick:hasPoint ?occupiedSet .
+    ?occupiedSet a brick:Occupied_Temperature_Setpoint .
+    OPTIONAL { ?occupiedSet brick:hasTimeseriesId ?occupiedSetpointId . }
+  }
+  OPTIONAL {
+    ?zone brick:hasPoint ?unoccupiedSet .
+    ?unoccupiedSet a brick:Unoccupied_Temperature_Setpoint .
+    OPTIONAL { ?unoccupiedSet brick:hasTimeseriesId ?unoccupiedSetpointId . }
+  }
+
+  # ---- Occupancy sensor and command -------------------------------------
+  OPTIONAL {
+    ?zone brick:hasPoint ?occSensor .
+    ?occSensor a brick:Occupancy_Sensor .
+    OPTIONAL { ?occSensor brick:hasTimeseriesId ?occupancySensorId . }
+  }
+  OPTIONAL {
+    ?zone brick:hasPoint ?occCommand .
+    ?occCommand a brick:Occupancy_Command .
+    OPTIONAL { ?occCommand brick:hasTimeseriesId ?occupancyCommandId . }
+  }
+
+  # ---- VAV serving the zone and its associated points -------------------
+  OPTIONAL {
+    ?vav a brick:VAV .
+    ?vav brick:feeds ?zone .
+    # VAV damper point (position command or status)
+    OPTIONAL {
+      ?vav brick:hasPoint ?damper .
+      ?damper a brick:Damper .
+      OPTIONAL { ?damper brick:hasTimeseriesId ?damperId . }
+    }
+    # Discharge air temperature sensor
+    OPTIONAL {
+      ?vav brick:hasPoint ?disTemp .
+      ?disTemp a brick:Discharge_Air_Temperature_Sensor .
+      OPTIONAL { ?disTemp brick:hasTimeseriesId ?dischargeTempId . }
+    }
+    # Reheat command point
+    OPTIONAL {
+      ?vav brick:hasPoint ?reheatCmd .
+      ?reheatCmd a brick:Reheat_Command .
+      OPTIONAL { ?reheatCmd brick:hasTimeseriesId ?reheatCmdId . }
+    }
+  }
+}
+ORDER BY ?zone",True,False,False,1079,16,0,15,0.967741935483871,0.0,0.0,0.0,True,1945,8089,10034,,
