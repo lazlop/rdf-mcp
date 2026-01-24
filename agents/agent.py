@@ -182,7 +182,26 @@ class SimpleSparqlAgentMCP:
         self.limits = UsageLimits(total_tokens_limit = self.total_tokens_limit, request_limit = self.max_tool_calls)
 
         recommended_tool_calls = self.max_tool_calls // 5
-        system_prompt = (
+
+        if reasoning_model:
+            system_prompt = (
+                f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
+                f"Generate a complete SPARQL query to answer the user's question. "
+                f"You can use the provided MCP tools to generate the query. \n"
+                f"Here is an example workflow:\n"
+                f"Step 1: Call get_building_summary to understand the building model\n"
+                f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
+                f"Step 3: Call sparql_snapshots to develop query patterns\n"
+                f"Step 4: Construct your SPARQL query based on the information gathered\n"
+                # f"CRITICAL EFFICIENCY RULES:\n"
+                # f"- Think in concise drafts: before making tool calls, write a brief draft with your plan\n"
+                # f"- In your draft, outline: (1) what you already know, (2) what tools you need, (3) your query strategy\n"
+                # f"- Keep drafts to 2 sentences maximum\n"
+                # f"- After gathering information, write a final <draft> of your SPARQL query before executing\n"
+                # f"- Avoid unnecessary verification, and tool calls\n"
+            )
+        else:
+            system_prompt = (
             f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223.\n\n"
             f"WORKFLOW - Follow these steps in order:\n"
             f"Step 1: Call get_building_summary to understand the building model\n"
@@ -195,15 +214,6 @@ class SimpleSparqlAgentMCP:
             f"When returning projections, include more columns rather than fewer.\n"
             # f"Maximum tool calls available: {self.max_tool_calls}\n"
             )
-
-        if reasoning_model:
-            system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
-            f"Generate a complete SPARQL query to answer the user's question. "
-            f"You can use the provided MCP tools to generate the query."
-            f"Use the sparql_snapshot tool to ensure the final query is correct before returning the final result."
-            f"Use up to {recommended_tool_calls} tool calls if needed.\n\n"
-        )
 
         self.agent = Agent(
             self.model,
@@ -250,14 +260,13 @@ class SimpleSparqlAgentMCP:
             f"3. What am I looking for from each tool?\n\n"
             f"Provide your reasoning and planned approach."
         )
+        self.all_previous_messages = []
         
         try:
-            self.all_previous_messages = []
-            
             # Create a planning agent without structured output
             planning_agent = Agent(
                 self.model,
-                # toolsets=[self.toolset],
+                toolsets=[self.toolset],
                 system_prompt="You are a helpful assistant that plans approaches to solving SPARQL query generation tasks.",
             )
             if self.reasoning_model:
@@ -292,7 +301,6 @@ class SimpleSparqlAgentMCP:
                 if i == 0:
                     # First iteration: use the plan
                     if self.reasoning_model:
-                        recommended_tool_calls = self.max_tool_calls // 3
                         execution_prompt = (
                             f"Question: {nl_question}\n\n"
                             # f"Generate a SPARQL query to answer the user question. \n"
@@ -481,33 +489,6 @@ class SimpleSparqlAgentMCP:
                 print("♻️ Using LAST_SPARQL_QUERY from environment.")
             else:
                 print("💔 Could not generate a query")
-            log_entry = {
-            **eval_data,
-            'model': self.model_name,
-            'generated_sparql': generated_query,
-            'message_history': "\n".join(self.all_previous_messages),
-            'syntax_ok': False,
-            'returns_results': False,
-            'perfect_match': False,
-            'gt_num_rows': 0,
-            'gt_num_cols': 0,
-            'gen_num_rows': 0,
-            'gen_num_cols': 0,
-            'arity_matching_f1': 0.0,
-            'entity_set_f1': 0.0,
-            'row_matching_f1': 0.0,
-            'exact_match_f1': 0.0,
-            'best_subset_column_f1': 0.0,
-            'less_columns_flag': True,
-            'tool_calls_exceeded': tool_calls_exceeded,
-            'actual_tool_calls': actual_tool_calls,
-            'max_tool_calls': self.max_tool_calls,
-            'prompt_tokens': self.prompt_tokens,
-            'completion_tokens': self.completion_tokens,
-            'total_tokens': self.total_tokens
-        }
-            logger.log(log_entry)
-            return
 
         # -----------------------------------------------------------------
         # Evaluate with exponential backoff

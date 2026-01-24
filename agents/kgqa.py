@@ -553,7 +553,7 @@ def sparql_snapshot(query: str) -> Dict[str, Any]:
         else:
             print(f"   -> Retrieved {len(bindings)} results.")
             os.environ["LAST_SPARQL_QUERY"] = input_query
-            print(bindings)
+            print(bindings[:1])
         return {
             "summary_string": summary,
             "results": bindings[:result_length],
@@ -1086,50 +1086,50 @@ def _ensure_uri_finder_loaded():
     return _uri_finder
 
 @mcp.tool()
-def fuzzy_search_class(
-    query: str,
-    search_type: typeLiteral["both", "classes", "predicates"] = "both",
-    n_results: int = 10
+def find_similar_class(
+    input_string: str,
+    concept_type: typeLiteral["both", "classes", "predicates"] = "both",
+    n_results: int = 5
 ) -> Dict[str, Any]:
     """
-    Find classes or predicates that match the search query using semantic similarity.
+    Find classes or predicates that are similar to the search input_string using simple semantic similarity.
+    Default behavior retrieves 5 likely classes
     
     When to use:
-    - When you know the concept but not the exact class or property name
-    - Before writing SPARQL queries to find the correct URIs to use
+    - When you want to make sure of the the exact class or property name to use
     
     Args:
-        query: Natural language description or partial name to search for
-        search_type: What to search for:
+        concept_string: Natural language description or partial name to find similar classes for
+        search_type: 
                     - "both": Search both classes and predicates (default)
                     - "classes": Search only classes
                     - "predicates": Search only predicates
-        n_results: Number of similar results to return (default: 10)
+        n_results: Number of similar results to return (default: 5)
     
     Returns:
         Dictionary containing:
-        - matches: List of matching items with uri, label, comment, type (class/predicate)
+        - matches: List of matching items with uri
 
     """
     finder = _ensure_uri_finder_loaded()
     
         # Validate search_type
-    if search_type == "classes":
-        search_type = "class"
-    elif search_type == "predicates":
-        search_type = "predicate"
+    if concept_type == "classes":
+        concept_type = "class"
+    elif concept_type == "predicates":
+        concept_type = "predicate"
 
-    if search_type not in ["both", "class", "predicate"]:
+    if concept_type not in ["both", "class", "predicate"]:
         return {
-            "error": f"Invalid search_type '{search_type}'. Must be 'both', 'classes', or 'predicates'",
+            "error": f"Invalid concept_type '{concept_type}'. Must be 'both', 'classes', or 'predicates'",
         }
     
     try:
         finder = _ensure_uri_finder_loaded()
         
         matches = finder.find_similar(
-            query=query, 
-            search_type=search_type,
+            query=input_string, 
+            search_type=concept_type,
             n_results=n_results
         )
         match_uri_list = [convert_to_prefixed(dct['uri'], parsed_graph) for dct in matches]
