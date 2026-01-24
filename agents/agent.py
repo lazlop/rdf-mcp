@@ -100,11 +100,12 @@ class SimpleSparqlAgentMCP:
         model_name: str = "lbl/cborg-coder",
         max_tool_calls: int = 100,
         max_iterations: int = 1,
-        total_tokens_limit: int = 100000,
+        total_tokens_limit: int = 200000,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        api_key_file: Optional[str] = None,
+        config_file: Optional[str] = None,
         mcp_server_script: str = "../agents/kgqa.py",
+        reasoning_model: bool = True,
     ):
         """
         Initialize the Simple SPARQL Agent with MCP support.
@@ -136,17 +137,19 @@ class SimpleSparqlAgentMCP:
             self.api_key = api_key
             self.base_url = base_url
             self.mcp_server_script = mcp_server_script
-        elif api_key_file:
-            with open(api_key_file, 'r') as file:
-                config = yaml.safe_load(file)
-                self.api_key = config.get('key', api_key)
-                self.base_url = config.get('base_url', base_url)
-                # self.mcp_server_script = config.get('mcp_server_script', mcp_server_script)
-        else:
-            self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-            self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
-            self.mcp_server_script = mcp_server_script
-
+        elif config_file:
+            with open(config_file, 'r') as file:
+                config = json.load(file)
+                self.api_key = config.get('api-key', api_key)
+                self.base_url = config.get('base-url', base_url)
+                self.model_name = config.get('models', model_name)[0]
+                self.total_tokens_limit = config.get('total_tokens_limit', total_tokens_limit)
+                self.max_iterations = config.get('max_iterations', max_iterations)
+                self.max_tool_calls = config.get('max_tool_calls', max_tool_calls)
+                self.mcp_server_script = config.get('mcp_server_script', mcp_server_script)
+                self.reasoning_model = config.get('reasoning_model', reasoning_model)
+                print(config)
+        
         self.is_remote = sparql_endpoint.lower().startswith("http")
 
         if self.is_remote:
@@ -184,13 +187,28 @@ class SimpleSparqlAgentMCP:
             f"WORKFLOW - Follow these steps in order:\n"
             f"Step 1: Call get_building_summary to understand the building model\n"
             f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
-            f"Step 3: Review sparql_snapshots for similar query patterns\n"
+            f"Step 3: Review sparql_snapshots to develop query patterns\n"
             f"Step 4: Construct your SPARQL query based on the information gathered\n"
             f"Step 5: If query fails, call describe_entity on problematic entities\n\n"
             f"IMPORTANT: You must call tools to gather information before writing the query. "
             f"Do not guess - use the tools to verify entity names, relationships, and patterns.\n\n"
             f"When returning projections, include more columns rather than fewer.\n"
             # f"Maximum tool calls available: {self.max_tool_calls}\n"
+            )
+
+        if reasoning_model:
+            system_prompt = (
+            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223.\n\n"
+            f"Your task is to generate a complete SPARQL query to answer the user's question. "
+            f"WORKFLOW - Follow these steps:\n"
+            f"Step 1: Call get_building_summary to understand the building model\n"
+            f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
+            f"Step 3: Review sparql_snapshots to develop query patterns\n"
+            f"Step 4: Construct your SPARQL query based on the information gathered\n"
+            f"Step 5: If query fails, call describe_entity on problematic entities\n\n"
+            f"IMPORTANT: You must call tools to gather information before writing the query. "
+            f"When returning projections, include more columns rather than fewer.\n"
+            f"Maximum tool calls available: {self.max_tool_calls}\n"
             )
 
         self.agent = Agent(
@@ -245,29 +263,31 @@ class SimpleSparqlAgentMCP:
             # Create a planning agent without structured output
             planning_agent = Agent(
                 self.model,
-                toolsets=[self.toolset],
+                # toolsets=[self.toolset],
                 system_prompt="You are a helpful assistant that plans approaches to solving SPARQL query generation tasks.",
             )
-            
-            print("📋 Phase 1: Planning approach...")
-            with capture_run_messages() as planning_messages:
-                planning_result = await planning_agent.run(
-                    planning_prompt,
-                    usage_limits=self.limits,
-                )
+            if self.reasoning_model:
+                print("🤖 Skipping planning phase for reasoning models.")
+            else:
+                print("📋 Phase 1: Planning approach...")
+                with capture_run_messages() as planning_messages:
+                    planning_result = await planning_agent.run(
+                        planning_prompt,
+                        usage_limits=self.limits,
+                    )
+                    
+                    # Track tokens from planning
+                    if hasattr(planning_result, 'usage'):
+                        usage = planning_result.usage()
+                        if usage:
+                            self.prompt_tokens += usage.input_tokens
+                            self.completion_tokens += usage.output_tokens
+                            self.total_tokens += usage.total_tokens
+                    
+                    self.all_previous_messages += [str(msg) for msg in planning_messages]
                 
-                # Track tokens from planning
-                if hasattr(planning_result, 'usage'):
-                    usage = planning_result.usage()
-                    if usage:
-                        self.prompt_tokens += usage.input_tokens
-                        self.completion_tokens += usage.output_tokens
-                        self.total_tokens += usage.total_tokens
-                
-                self.all_previous_messages += [str(msg) for msg in planning_messages]
-            
-            plan = planning_result.data if hasattr(planning_result, 'data') else str(planning_result)
-            print(f"📝 Plan: {plan}\n")
+                plan = planning_result.data if hasattr(planning_result, 'data') else str(planning_result)
+                print(f"📝 Plan: {plan}\n")
             
             # =========================================================================
             # PHASE 2: EXECUTION - Execute the plan and generate query
@@ -277,15 +297,25 @@ class SimpleSparqlAgentMCP:
                 
                 if i == 0:
                     # First iteration: use the plan
-                    execution_prompt = (
-                        f"Question: {nl_question}\n\n"
-                        f"Your planned approach:\n{plan}\n\n"
-                        f"Now execute this plan:\n"
-                        f"1. Call the tools you identified to gather necessary information\n"
-                        f"2. Use the tool results to construct an accurate SPARQL query\n"
-                        f"3. Return the complete SPARQL query\n\n"
-                        f"Remember: Use actual entity names and relationships discovered through the tools."
-                    )
+                    if self.reasoning_model:
+                        recommended_tool_calls = self.max_tool_calls // 3
+                        execution_prompt = (
+                            f"Question: {nl_question}\n\n"
+                            f"Generate a SPARQL query to answer the user question. \n"
+                            f"Use the tools available to gather necessary information before constructing the query. \n"
+                            f"Return the complete SPARQL query. \n"
+                            f"IMPORTANT - when you have gathered enough information, return the SPARQL query. \n"                            
+                        )
+                    else:
+                        execution_prompt = (
+                            f"Question: {nl_question}\n\n"
+                            f"Your planned approach:\n{plan}\n\n"
+                            f"Now execute this plan:\n"
+                            f"1. Call the tools you identified to gather necessary information\n"
+                            f"2. Use the tool results to construct an accurate SPARQL query\n"
+                            f"3. Return the complete SPARQL query\n\n"
+                            f"Remember: Use actual entity names and relationships discovered through the tools."
+                        )
                 else:
                     # Retry iterations: include previous failure context with critique feedback
                     execution_prompt = (

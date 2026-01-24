@@ -935,8 +935,7 @@ class GraphURIFinder:
         query = """
         SELECT DISTINCT ?predicate ?label ?comment
         WHERE {
-            ?predicate a ?type .
-            FILTER(?type IN (rdf:Property, owl:ObjectProperty, owl:DatatypeProperty))
+            ?s ?predicate ?o .
             
             OPTIONAL { ?predicate rdfs:label ?label }
             OPTIONAL { ?predicate rdfs:comment ?comment }

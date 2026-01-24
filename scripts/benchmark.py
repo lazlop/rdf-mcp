@@ -88,6 +88,7 @@ def load_kg_content(ttl_path: Path) -> str:
 async def process_building_queries(
     json_data: List[Dict],
     logger: CsvLogger,
+    config_file: str = "../configs/cborg-coder-config.json",
 ) -> None:
     """
     Process all queries for a single building.
@@ -117,9 +118,7 @@ async def process_building_queries(
     agent = SimpleSparqlAgentMCP(
         sparql_endpoint=str(ttl_path),
         parsed_graph_file=str(parsed_ttl_path),
-        model_name=MODEL_NAME,
-        api_key=API_KEY,
-        base_url=BASE_URL,
+        config_file = config_file,
     )
 
     queries_list = building_data.get("queries", [])
@@ -214,7 +213,7 @@ async def main_async(config_path: str = "../configs/benchmark-config.json") -> N
             continue
         try:
             json_data = load_json_file(json_path)
-            await process_building_queries(json_data, logger)
+            await process_building_queries(json_data, logger, config_file=config_path)
         except Exception as e:
             print(f"❌ Unexpected error while processing {json_path.name}: {e}")
             import traceback
