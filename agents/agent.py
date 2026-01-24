@@ -193,6 +193,7 @@ class SimpleSparqlAgentMCP:
                 f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
                 f"Step 3: Call sparql_snapshots to develop query patterns\n"
                 f"Step 4: Construct your SPARQL query based on the information gathered\n"
+                f"When returning projections, include more columns rather than fewer.\n"
                 # f"CRITICAL EFFICIENCY RULES:\n"
                 # f"- Think in concise drafts: before making tool calls, write a brief draft with your plan\n"
                 # f"- In your draft, outline: (1) what you already know, (2) what tools you need, (3) your query strategy\n"
