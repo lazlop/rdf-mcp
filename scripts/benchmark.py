@@ -88,7 +88,6 @@ def load_kg_content(ttl_path: Path) -> str:
 async def process_building_queries(
     json_data: List[Dict],
     logger: CsvLogger,
-    max_tool_calls: int = 20,
 ) -> None:
     """
     Process all queries for a single building.
@@ -96,7 +95,6 @@ async def process_building_queries(
     Args:
         json_data: List containing building data with queries.
         logger: CSV logger instance.
-        max_tool_calls: Maximum number of tool calls for the agent.
     """
     if not json_data:
         print("Warning: Empty JSON data")
@@ -120,7 +118,6 @@ async def process_building_queries(
         sparql_endpoint=str(ttl_path),
         parsed_graph_file=str(parsed_ttl_path),
         model_name=MODEL_NAME,
-        max_tool_calls=max_tool_calls,
         api_key=API_KEY,
         base_url=BASE_URL,
     )

@@ -98,8 +98,9 @@ class SimpleSparqlAgentMCP:
         sparql_endpoint: str, # just a graph file for now
         parsed_graph_file: str,
         model_name: str = "lbl/cborg-coder",
-        max_tool_calls: int = 30,
-        max_iterations: int = 3,
+        max_tool_calls: int = 100,
+        max_iterations: int = 1,
+        total_tokens_limit: int = 100000,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         api_key_file: Optional[str] = None,
@@ -128,6 +129,7 @@ class SimpleSparqlAgentMCP:
         self.messages = []
         self.max_iterations = max_iterations
         self.toolset = FastMCPToolset(mcp)
+        self.total_tokens_limit = total_tokens_limit
 
         # Load API credentials
         if api_key:
@@ -174,7 +176,7 @@ class SimpleSparqlAgentMCP:
         )
 
         
-        self.limits = UsageLimits(total_tokens_limit = 100000, request_limit = 20)
+        self.limits = UsageLimits(total_tokens_limit = self.total_tokens_limit, request_limit = self.max_tool_calls)
 
         recommended_tool_calls = self.max_tool_calls // 3
         system_prompt = (
@@ -350,96 +352,97 @@ class SimpleSparqlAgentMCP:
                 # =========================================================================
                 # PHASE 3: OBSERVATION - Test the query and decide next action
                 # =========================================================================
-                print("🔍 Phase 3: Testing and critiquing query...")
-
-                # Execute the query
-                query_results = sparql_query(generated_query, result_length=100)
-
-                # Prepare results summary for critique
-                if query_results and query_results['row_count'] > 0:
-                    results_summary = f"Query returned {query_results['row_count']} results successfully."
-                    print(f"   ✅ {results_summary}")
-                else:
-                    error_msg = query_results.get('error', 'No results') if query_results else 'Query execution failed'
-                    results_summary = f"Query failed with error: {error_msg}"
-                    print(f"   ❌ {results_summary}")
-
-                # Call Critique Agent to evaluate the query
-                print("🧐 Calling Critique Agent...")
                 
-                # Create critique agent with structured output
-                critique_agent = Agent(
-                    self.model,
-                    output_type=QueryCritique,
-                    toolsets = [self.toolset],
-                    system_prompt=(
-                        "You are an expert in SPARQL, especially for Brick Schema and ASHRAE 223p. "
-                        "Your job is to review a SPARQL query and its results based on an original question. "
-                        "Think carefully about whether the query answers the question accurately. Does it retrieve enough results? "
-                        "Provide brief constructive feedback to improve the query if needed."
-                        "Use 'FINAL' if the query correctly answers the question, even with zero results if that's the accurate answer. "
-                        "Use 'IMPROVE' if the query has errors, incorrect logic, or doesn't address the question properly."
-                    ),
-                )
-                
-                # Build critique prompt
-                critique_prompt = (
-                    f"Original Question: \"{nl_question}\"\n\n"
-                    f"SPARQL Query Attempt:\n```sparql\n{generated_query}\n```\n\n"
-                    f"Execution Results Summary:\n{results_summary}\n\n"
-                    f"Sample Results (if any):\n"
-                    f"{json.dumps(query_results.get('results', [])[:3], indent=2) if query_results and query_results.get('results') else 'None'}\n\n"
-                    f"Provide your decision (FINAL or IMPROVE) and detailed feedback."
-                )
-                
-                try:
-                    with capture_run_messages() as critique_messages:
-                        critique_result = await critique_agent.run(
-                            critique_prompt,
-                            usage_limits=self.limits,
-                        )
-                        
-                        # Track tokens from critique
-                        if hasattr(critique_result, 'usage'):
-                            usage = critique_result.usage()
-                            if usage:
-                                self.prompt_tokens += usage.input_tokens
-                                self.completion_tokens += usage.output_tokens
-                                self.total_tokens += usage.total_tokens
-                        
-                        self.all_previous_messages += [str(msg) for msg in critique_messages]
-                    
-                    # Extract critique data
-                    critique = critique_result.output
-                    
-                    print(f"   -> Critique Decision: {critique.decision}")
-                    print(f"   -> Critique Feedback: {critique.feedback}")
+                if i < self.max_iterations - 1:
+                    print("🔍 Phase 3: Testing and critiquing query...")
 
-                    # Act on critique decision
-                    if critique.decision == "FINAL":
-                        print("\n✅ Critique Agent approved the query. Refinement complete.")
-                        break
+                    # Execute the query
+                    query_results = sparql_query(generated_query, result_length=100)
+
+                    # Prepare results summary for critique
+                    if query_results and query_results['row_count'] > 0:
+                        results_summary = f"Query returned {query_results['row_count']} results successfully."
+                        print(f"   ✅ {results_summary}")
                     else:
-                        # Query needs improvement - store feedback for next iteration
-                        print(f"   ⚠️  Query needs improvement: {critique.feedback}")
-                        critique_feedback = critique.feedback
+                        error_msg = query_results.get('error', 'No results') if query_results else 'Query execution failed'
+                        results_summary = f"Query failed with error: {error_msg}"
+                        print(f"   ❌ {results_summary}")
+
+                    # Call Critique Agent to evaluate the query
+                    print("🧐 Calling Critique Agent...")
+                    
+                    # Create critique agent with structured output
+                    critique_agent = Agent(
+                        self.model,
+                        output_type=QueryCritique,
+                        toolsets = [self.toolset],
+                        system_prompt=(
+                            "You are an expert in SPARQL, especially for Brick Schema and ASHRAE 223p. "
+                            "Your job is to review a SPARQL query and its results based on an original question. "
+                            "Think carefully about whether the query answers the question accurately. Does it retrieve enough results? "
+                            "Provide brief constructive feedback to improve the query if needed."
+                            "Use 'FINAL' if the query correctly answers the question, even with zero results if that's the accurate answer. "
+                            "Use 'IMPROVE' if the query has errors, incorrect logic, or doesn't address the question properly."
+                        ),
+                    )
+                    
+                    # Build critique prompt
+                    critique_prompt = (
+                        f"Original Question: \"{nl_question}\"\n\n"
+                        f"SPARQL Query Attempt:\n```sparql\n{generated_query}\n```\n\n"
+                        f"Execution Results Summary:\n{results_summary}\n\n"
+                        f"Sample Results (if any):\n"
+                        f"{json.dumps(query_results.get('results', [])[:3], indent=2) if query_results and query_results.get('results') else 'None'}\n\n"
+                        f"Provide your decision (FINAL or IMPROVE) and detailed feedback."
+                    )
+                    
+                    try:
+                        with capture_run_messages() as critique_messages:
+                            critique_result = await critique_agent.run(
+                                critique_prompt,
+                                usage_limits=self.limits,
+                            )
+                            
+                            # Track tokens from critique
+                            if hasattr(critique_result, 'usage'):
+                                usage = critique_result.usage()
+                                if usage:
+                                    self.prompt_tokens += usage.input_tokens
+                                    self.completion_tokens += usage.output_tokens
+                                    self.total_tokens += usage.total_tokens
+                            
+                            self.all_previous_messages += [str(msg) for msg in critique_messages]
                         
+                        # Extract critique data
+                        critique = critique_result.output
+                        
+                        print(f"   -> Critique Decision: {critique.decision}")
+                        print(f"   -> Critique Feedback: {critique.feedback}")
+
+                        # Act on critique decision
+                        if critique.decision == "FINAL":
+                            print("\n✅ Critique Agent approved the query. Refinement complete.")
+                            break
+                        else:
+                            # Query needs improvement - store feedback for next iteration
+                            print(f"   ⚠️  Query needs improvement: {critique.feedback}")
+                            critique_feedback = critique.feedback
+                            
+                            if not RUN_UNTIL_RESULTS:
+                                print("   Stopping after single iteration (RUN_UNTIL_RESULTS=False)")
+                                break
+                            
+                            print(f"   🔄 Retrying with feedback ({i+1}/{self.max_iterations})...")
+                            # feedback will be used in next iteration's execution_prompt
+                    
+                    except Exception as e:
+                        print(f"❌ Critique Agent failed: {e}")
                         if not RUN_UNTIL_RESULTS:
                             print("   Stopping after single iteration (RUN_UNTIL_RESULTS=False)")
                             break
-                        
-                        print(f"   🔄 Retrying with feedback ({i+1}/{self.max_iterations})...")
-                        # feedback will be used in next iteration's execution_prompt
-                
-                except Exception as e:
-                    print(f"❌ Critique Agent failed: {e}")
-                    if not RUN_UNTIL_RESULTS:
-                        print("   Stopping after single iteration (RUN_UNTIL_RESULTS=False)")
-                        break
-                    print(f"   🔄 Retrying ({i+1}/{self.max_iterations})...")
-                    critique_feedback = f"Critique agent failed with error: {str(e)}. Please review and improve your query."
-                    continue
-            
+                        print(f"   🔄 Retrying ({i+1}/{self.max_iterations})...")
+                        critique_feedback = f"Critique agent failed with error: {str(e)}. Please review and improve your query."
+                        continue
         except Exception as e:
             print(f"❌ Error during query generation: {e}")
             import traceback
@@ -448,8 +451,10 @@ class SimpleSparqlAgentMCP:
             tool_calls_exceeded = False
 
         if not generated_query:
-            if tool_calls_exceeded:
-                print(f"💔 Could not generate a query - tool call limit exceeded ({actual_tool_calls}/{self.max_tool_calls})")
+            last_sparql_query = os.getenv('LAST_SPARQL_QUERY', '')
+            if last_sparql_query != '':
+                generated_query = last_sparql_query
+                print("♻️ Using LAST_SPARQL_QUERY from environment.")
             else:
                 print("💔 Could not generate a query")
             log_entry = {
