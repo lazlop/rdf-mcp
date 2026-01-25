@@ -18,7 +18,6 @@ from openai import OpenAI
 from pydantic import BaseModel, Field, ValidationError
 from pyparsing import ParseException
 from rdflib import BNode, Graph, Literal, URIRef
-from SPARQLWrapper import JSON, SPARQLWrapper
 
 def get_kg_subset_content(original_ttl_path: str, max_triples: int) -> str:
     """

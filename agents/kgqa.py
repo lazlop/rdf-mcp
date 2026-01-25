@@ -337,7 +337,7 @@ def add_prefixes_to_sparql(query: str, graph) -> str:
         # No existing prefixes, add them before the query
         return f"{prefixes}\n{query}"
 
-# @mcp.tool()
+@mcp.tool()
 def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     """
     Find all entities of a specific type (class). Use this to discover what specific 

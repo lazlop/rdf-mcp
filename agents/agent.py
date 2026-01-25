@@ -28,7 +28,6 @@ from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponenti
 
 from pyparsing import ParseException
 from rdflib import BNode, Graph, Literal, URIRef
-from SPARQLWrapper import JSON, SPARQLWrapper
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -194,12 +193,12 @@ class SimpleSparqlAgentMCP:
                 f"Step 3: Call sparql_snapshots to develop query patterns\n"
                 f"Step 4: Construct your SPARQL query based on the information gathered\n"
                 f"When returning projections, include more columns rather than fewer.\n"
-                # f"CRITICAL EFFICIENCY RULES:\n"
-                # f"- Think in concise drafts: before making tool calls, write a brief draft with your plan\n"
-                # f"- In your draft, outline: (1) what you already know, (2) what tools you need, (3) your query strategy\n"
-                # f"- Keep drafts to 2 sentences maximum\n"
-                # f"- After gathering information, write a final <draft> of your SPARQL query before executing\n"
-                # f"- Avoid unnecessary verification, and tool calls\n"
+                f"CRITICAL EFFICIENCY RULES:\n"
+                f"- Think in concise drafts: before making tool calls, write a brief draft with your plan\n"
+                f"- In your draft, outline: (1) what you already know, (2) what tools you need, (3) your query strategy\n"
+                f"- Keep drafts to 2 sentences maximum\n"
+                f"- After gathering information, write a final <draft> of your SPARQL query before executing\n"
+                f"- Avoid unnecessary verification, and tool calls\n"
             )
         else:
             system_prompt = (
@@ -303,7 +302,7 @@ class SimpleSparqlAgentMCP:
                     # First iteration: use the plan
                     if self.reasoning_model:
                         execution_prompt = (
-                            f"Question: {nl_question}\n\n"
+                            f"User Question: {nl_question}\n"
                             # f"Generate a SPARQL query to answer the user question. \n"
                             # f"Use the tools available to gather necessary information before constructing the query. \n"
                             # f"Return the complete SPARQL query. \n"
@@ -369,8 +368,7 @@ class SimpleSparqlAgentMCP:
                     
                     # Check if no tools were called on first execution
                     if i == 0 and iteration_tool_calls == 0:
-                        print("⚠️ No tools called in first iteration - this may indicate the model is guessing!")
-                        print("   Consider making tool usage mandatory in your system prompt.")
+                        print("⚠️ No tools called in first iteration")
                     
                     # Check tool call limit
                     if actual_tool_calls > self.max_tool_calls:
@@ -497,11 +495,9 @@ class SimpleSparqlAgentMCP:
         # -----------------------------------------------------------------
         
         print("Evaluating generated query...")
-        print(generated_query)
         gen_results_obj = sparql_query(generated_query)
 
         print("Evaluating ground truth query...")
-        print(ground_truth_sparql)
         if ground_truth_sparql:
             gt_results_obj = sparql_query(ground_truth_sparql)        
         # Calculate metrics
