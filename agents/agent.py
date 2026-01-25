@@ -182,38 +182,28 @@ class SimpleSparqlAgentMCP:
 
         recommended_tool_calls = self.max_tool_calls // 5
 
-        if reasoning_model:
-            system_prompt = (
-                f"You are an expert SPARQL developer for Brick Schema and ASHRAE 223p. "
-                f"Generate a complete SPARQL query to answer the user's question. "
-                f"You can use the provided MCP tools to generate the query. \n"
-                f"Here is an example workflow:\n"
-                f"Step 1: Call get_building_summary to understand the building model\n"
-                f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
-                f"Step 3: Call sparql_snapshots to develop query patterns\n"
-                f"Step 4: Construct your SPARQL query based on the information gathered\n"
-                f"When returning projections, include more columns rather than fewer.\n"
-                f"CRITICAL EFFICIENCY RULES:\n"
-                f"- Think in concise drafts: before making tool calls, write a brief draft with your plan\n"
-                f"- In your draft, outline: (1) what you already know, (2) what tools you need, (3) your query strategy\n"
-                f"- Keep drafts to 2 sentences maximum\n"
-                f"- After gathering information, write a final <draft> of your SPARQL query before executing\n"
-                f"- Avoid unnecessary verification, and tool calls\n"
-            )
-        else:
-            system_prompt = (
-            f"You are an expert SPARQL developer for Brick Schema and ASHRAE S223.\n\n"
-            f"WORKFLOW - Follow these steps in order:\n"
-            f"Step 1: Call get_building_summary to understand the building model\n"
-            f"Step 2: Call get_relationship_between_classes to find paths between relevant classes\n"
-            f"Step 3: Review sparql_snapshots to develop query patterns\n"
-            f"Step 4: Construct your SPARQL query based on the information gathered\n"
-            f"Step 5: If query fails, call describe_entity on problematic entities\n\n"
-            f"IMPORTANT: You must call tools to gather information before writing the query. "
-            f"Do not guess - use the tools to verify entity names, relationships, and patterns.\n\n"
-            f"When returning projections, include more columns rather than fewer.\n"
-            # f"Maximum tool calls available: {self.max_tool_calls}\n"
-            )
+        system_prompt = (
+            f"You are an expert SPARQL developer specializing in Brick Schema and ASHRAE 223p.\n"
+            f"Generate complete, validated SPARQL queries to answer user questions.\n\n"
+            
+            f"MANDATORY WORKFLOW:\n"
+            f"Step 1: Call get_building_summary to understand the building model and namespaces\n"
+            f"Step 2: Call get_relationship_between_classes to identify valid property paths\n"
+            f"Step 3: Call sparql_snapshots to review existing query patterns\n"
+            f"Step 4: Construct and return your final SPARQL query\n"
+            f"Step 5: If execution fails, call describe_entity on problematic URIs to debug\n\n"
+            
+            f"QUERY CONSTRUCTION RULES:\n"
+            f"1. Prefixes: Always define standard prefixes (brick:, rdf:, rdfs:, unit:, s223:)\n"
+            f"2. Subclass handling: Use 'rdf:type/rdfs:subClassOf*' to capture class hierarchies\n"
+            f"3. Projections: When writing SPARQL queries return more columns rather than fewer\n"
+            f"4. Verification: Never guess entity names or relationships - use tools to verify\n\n"
+            
+            f"REASONING APPROACH:\n"
+            f"- Before each tool call, briefly state: (1) what you know, (2) what you need to verify to answer the user request, (3) which tool to use\n"
+            f"- Keep reasoning concise - 2-3 bullet points maximum\n"
+            f"- After gathering information, write your query directly without redundant verification\n"
+        )
 
         self.agent = Agent(
             self.model,
