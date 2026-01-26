@@ -12,7 +12,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.namespaces import bind_prefixes, get_prefixes, S223, BRICK, convert_to_prefixed
 
 mcp = FastMCP("GraphDemo")
-toolset1_mcp = FastMCP("t1")
+basic_mcp = FastMCP("t1")
+no_schema_mcp = FastMCP("t2")
+no_schema_search_mcp = FastMCP("t3")
+
+TOOLSETS = {'mcp': mcp, 'basic_mcp': basic_mcp, 'no_schema_mcp': no_schema_mcp, 'no_schema_with_search_mcp':no_schema_search_mcp}
+
 print("loaded mcp")
 
 # Define namespaces to exclude from shortest path search
@@ -29,6 +34,14 @@ EXCLUDED_PREDICATES = [
     BRICK.aliasOf,
     BRICK.hasAssociatedTag
 ]
+
+def _expand_uri(uri, g):
+    try:
+        uri = g.namespace_manager.expand_curie(uri)
+    except Exception as e:
+        print("couldn't describe class due to error, treating as uri: ", e)
+        uri = URIRef(uri)
+    return uri
 
 def _is_excluded_predicate(pred: URIRef) -> bool:
     """Check if a predicate belongs to an excluded namespace or is a specific excluded predicate."""
@@ -96,7 +109,9 @@ def _format_term(term, graph=None) -> Dict[str, Any]:
         return {'type': 'bnode', 'value': str(term)}
     else:
         return {'type': 'unknown', 'value': str(term)}
-    
+
+@no_schema_mcp.tool()
+@no_schema_search_mcp.tool()    
 @mcp.tool()
 def describe_entity(
     entity: str | URIRef
@@ -125,7 +140,7 @@ def describe_entity(
     
     # Convert string to URIRef
     if isinstance(entity, str):
-        central_uri = URIRef(entity)
+        central_uri = _expand_uri(entity, g)
     
     subgraph = Graph(store='Oxigraph')
     
@@ -168,6 +183,9 @@ def describe_entity(
     
     return subgraph.serialize(format="turtle")
 
+@basic_mcp.tool()
+@no_schema_mcp.tool()
+@no_schema_search_mcp.tool()
 @mcp.tool()
 def get_building_summary() -> Dict[str, Any]:
     """
@@ -337,6 +355,8 @@ def add_prefixes_to_sparql(query: str, graph) -> str:
         # No existing prefixes, add them before the query
         return f"{prefixes}\n{query}"
 
+@no_schema_mcp.tool()
+@no_schema_search_mcp.tool()
 @mcp.tool()
 def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     """
@@ -356,7 +376,7 @@ def find_entities_by_type(klass: str | URIRef) -> Dict[str, Any]:
     """
     top_n = 20
     g, parsed_graph = _ensure_graph_loaded()
-    class_uri = URIRef(klass)
+    class_uri = _expand_uri(klass, g)
     include_subclasses = False # may not want this all the time
     # Check if the class exists in the ontology
     if (class_uri, RDF.type, None) not in ontology and \
@@ -507,6 +527,9 @@ def get_sparql_prefixes() -> str:
         for prefix, namespace in pre_ns_list
     )
 
+@basic_mcp.tool()
+@no_schema_mcp.tool()
+@no_schema_search_mcp.tool()
 @mcp.tool()
 def sparql_snapshot(query: str) -> Dict[str, Any]:
     """
@@ -665,6 +688,8 @@ def sparql_query(query: str, result_length: int = 100000) -> Dict[str, Any]:
     finally:
         signal.alarm(0)
 
+@no_schema_mcp.tool()
+@no_schema_search_mcp.tool()
 @mcp.tool()
 def get_relationship_between_classes(
     start_class_uri: str,
@@ -695,8 +720,8 @@ def get_relationship_between_classes(
     max_depth: int = 7
     
     # Convert strings to URIRefs
-    start_class = URIRef(start_class_uri)
-    end_class = URIRef(end_class_uri)
+    start_class = _expand_uri(start_class_uri, g)
+    end_class = _expand_uri(end_class_uri, g)
     
     # Get all instances of the start class
     start_instances = list(g.subjects(RDF.type, start_class))
@@ -1085,15 +1110,17 @@ def _ensure_uri_finder_loaded():
     
     return _uri_finder
 
+@no_schema_search_mcp.tool()
 @mcp.tool()
-def find_similar_class(
+def find_similar_class_in_graph(
     input_string: str,
     concept_type: typeLiteral["both", "classes", "predicates"] = "both",
     n_results: int = 5
 ) -> Dict[str, Any]:
     """
     Find classes or predicates that are similar to the search input_string using simple semantic similarity.
-    Default behavior retrieves 5 likely classes
+    These classes or predicates are used within the model of the building.
+    Default behavior retrieves 5 likely classes.
     
     When to use:
     - When you want to make sure of the the exact class or property name to use
@@ -1150,7 +1177,7 @@ def describe_class(
 ) -> Dict[str, Any]:
     """
     Get detailed information about a class from the ontology including its definition,
-    parents, children, and related predicates through rdfs:domain/range and SHACL properties.
+    parents, children, and related predicates 
     
     When to use:
     - To understand what a class represents and how it relates to other classes
@@ -1163,16 +1190,15 @@ def describe_class(
     Returns:
         Dictionary containing:
         - comment: rdfs:comment defining the class
-        - parents: List of parent classes (via rdfs:subClassOf)
-        - children: List of child classes (inverse rdfs:subClassOf)
-        - from_predicates: Predicates that have this class as their rdfs:domain or as sh:targetClass
-        - to_predicates: Predicates that have this class as their rdfs:range or as sh:class/sh:node target
+        - parents: List of parent classes 
+        - children: List of child classes (
+        - from_predicates: Predicates that can relate entities of this class to other entities
+        - to_predicates: Predicates that can relate other entities to entities of this class
     """
     g, parsed_graph = _ensure_graph_loaded()
     
-    # Convert string to URIRef
-    klass = URIRef(class_uri)
-    
+    class_uri = _expand_uri(class_uri, g)
+
     result = {
         "class": convert_to_prefixed(class_uri, parsed_graph),
         "comment": None,
@@ -1181,19 +1207,20 @@ def describe_class(
         "from_predicates": [],
         "to_predicates": []
     }
-    
+    # testing with parsed_graph instead
+    ontology = parsed_graph
     # Get rdfs:comment
-    for comment in ontology.objects(klass, RDFS.comment):
+    for comment in ontology.objects(class_uri, RDFS.comment):
         result["comment"] = str(comment)
         break  # Take first comment
     
     # Get parent classes (rdfs:subClassOf)
-    for parent in ontology.objects(klass, RDFS.subClassOf):
+    for parent in ontology.objects(class_uri, RDFS.subClassOf):
         if isinstance(parent, URIRef):
             result["parents"].append(convert_to_prefixed(str(parent), parsed_graph))
     
     # Get child classes (inverse rdfs:subClassOf)
-    for child in ontology.subjects(RDFS.subClassOf, klass):
+    for child in ontology.subjects(RDFS.subClassOf, class_uri):
         if isinstance(child, URIRef):
             result["children"].append(convert_to_prefixed(str(child), parsed_graph))
     
@@ -1201,112 +1228,124 @@ def describe_class(
     from_predicates_seen = set()
     to_predicates_seen = set()
     
-    # Get predicates where this class is the domain (from rdfs:domain)
-    for predicate in ontology.subjects(RDFS.domain, klass):
-        if isinstance(predicate, URIRef):
-            pred_str = str(predicate)
-            if pred_str not in from_predicates_seen:
-                from_predicates_seen.add(pred_str)
-                pred_info = {
-                    "predicate": convert_to_prefixed(pred_str, parsed_graph),
-                    "comment": None,
-                    "source": "rdfs:domain"
-                }
-                # Try to get comment for the predicate
-                for comment in ontology.objects(predicate, RDFS.comment):
-                    pred_info["comment"] = str(comment)
+    # Helper function to get all ancestor classes
+    def get_ancestors(cls):
+        ancestors = set()
+        to_visit = [cls]
+        while to_visit:
+            current = to_visit.pop()
+            for parent in ontology.objects(current, RDFS.subClassOf):
+                if isinstance(parent, URIRef) and parent not in ancestors:
+                    ancestors.add(parent)
+                    to_visit.append(parent)
+        return ancestors
+    
+    # Get all classes to check (this class + all ancestors)
+    classes_to_check = [class_uri] + list(get_ancestors(class_uri))
+    
+    # Helper to add predicate info
+    def add_from_predicate(pred_str, source, property_shape=None):
+        if pred_str not in from_predicates_seen:
+            from_predicates_seen.add(pred_str)
+            pred_info = {
+                "predicate": convert_to_prefixed(pred_str, parsed_graph),
+                "comment": None,
+                # "source": source
+            }
+            predicate = URIRef(pred_str)
+            # Try to get comment/description
+            if property_shape:
+                for name in ontology.objects(property_shape, SH.name):
+                    pred_info["comment"] = str(name)
                     break
-                result["from_predicates"].append(pred_info)
-    
-    # Get predicates where this class is the range (from rdfs:range)
-    for predicate in ontology.subjects(RDFS.range, klass):
-        if isinstance(predicate, URIRef):
-            pred_str = str(predicate)
-            if pred_str not in to_predicates_seen:
-                to_predicates_seen.add(pred_str)
-                pred_info = {
-                    "predicate": convert_to_prefixed(pred_str, parsed_graph),
-                    "comment": None,
-                    "source": "rdfs:range"
-                }
-                # Try to get comment for the predicate
-                for comment in ontology.objects(predicate, RDFS.comment):
-                    pred_info["comment"] = str(comment)
-                    break
-                result["to_predicates"].append(pred_info)
-    
-    # Get SHACL properties where this class is the domain (sh:targetClass)
-    # Look for NodeShapes that target this class
-    for node_shape in ontology.subjects(SH.targetClass, klass):
-        # Get properties defined in this NodeShape
-        for prop in ontology.objects(node_shape, SH.property):
-            # Get sh:path (the predicate)
-            for path in ontology.objects(prop, SH.path):
-                if isinstance(path, URIRef):
-                    pred_str = str(path)
-                    if pred_str not in from_predicates_seen:
-                        from_predicates_seen.add(pred_str)
-                        pred_info = {
-                            "predicate": convert_to_prefixed(pred_str, parsed_graph),
-                            "comment": None,
-                            "source": "shacl:targetClass"
-                        }
-                        # Try to get sh:name or sh:description
-                        for name in ontology.objects(prop, SH.name):
-                            pred_info["comment"] = str(name)
-                            break
-                        if not pred_info["comment"]:
-                            for desc in ontology.objects(prop, SH.description):
-                                pred_info["comment"] = str(desc)
-                                break
-                        result["from_predicates"].append(pred_info)
-    
-    # Get SHACL properties where this class is the range (sh:class or sh:node)
-    # Look for property shapes where sh:class points to this class
-    for property_shape in ontology.subjects(SH['class'], klass):
-        # Get sh:path from this property shape
-        for path in ontology.objects(property_shape, SH.path):
-            if isinstance(path, URIRef):
-                pred_str = str(path)
-                if pred_str not in to_predicates_seen:
-                    to_predicates_seen.add(pred_str)
-                    pred_info = {
-                        "predicate": convert_to_prefixed(pred_str, parsed_graph),
-                        "comment": None,
-                        "source": "shacl:class"
-                    }
-                    # Try to get sh:name or sh:description
-                    for name in ontology.objects(property_shape, SH.name):
-                        pred_info["comment"] = str(name)
+                if not pred_info["comment"]:
+                    for desc in ontology.objects(property_shape, SH.description):
+                        pred_info["comment"] = str(desc)
                         break
-                    if not pred_info["comment"]:
-                        for desc in ontology.objects(property_shape, SH.description):
-                            pred_info["comment"] = str(desc)
-                            break
-                    result["to_predicates"].append(pred_info)
+            if not pred_info["comment"]:
+                for comment in ontology.objects(predicate, RDFS.comment):
+                    pred_info["comment"] = str(comment)
+                    break
+            result["from_predicates"].append(pred_info)
     
-    # Look for property shapes where sh:node points to a NodeShape targeting this class
-    for node_ref in ontology.subjects(SH.targetClass, klass):
-        for property_shape in ontology.subjects(SH.node, node_ref):
+    def add_to_predicate(pred_str, source, property_shape=None):
+        if pred_str not in to_predicates_seen:
+            to_predicates_seen.add(pred_str)
+            pred_info = {
+                "predicate": convert_to_prefixed(pred_str, parsed_graph),
+                "comment": None,
+                # "source": source
+            }
+            predicate = URIRef(pred_str)
+            # Try to get comment/description
+            if property_shape:
+                for name in ontology.objects(property_shape, SH.name):
+                    pred_info["comment"] = str(name)
+                    break
+                if not pred_info["comment"]:
+                    for desc in ontology.objects(property_shape, SH.description):
+                        pred_info["comment"] = str(desc)
+                        break
+            if not pred_info["comment"]:
+                for comment in ontology.objects(predicate, RDFS.comment):
+                    pred_info["comment"] = str(comment)
+                    break
+            result["to_predicates"].append(pred_info)
+    
+    # Check each class (original + ancestors)
+    for check_class in classes_to_check:
+        # Get predicates where this class is the domain (from rdfs:domain)
+        for predicate in ontology.subjects(RDFS.domain, check_class):
+            if isinstance(predicate, URIRef):
+                add_from_predicate(str(predicate), "rdfs:domain")
+        
+        # Get predicates where this class is the range (from rdfs:range)
+        for predicate in ontology.subjects(RDFS.range, check_class):
+            if isinstance(predicate, URIRef):
+                add_to_predicate(str(predicate), "rdfs:range")
+        
+        # SHACL: Check if this class is a NodeShape with properties
+        # This handles the pattern where a class defines sh:property directly (Brick style)
+        for prop_shape in ontology.objects(check_class, SH.property):
+            # Get sh:path (the predicate)
+            for path in ontology.objects(prop_shape, SH.path):
+                if isinstance(path, URIRef):
+                    add_from_predicate(str(path), "shacl:property", prop_shape)
+                    
+                    # Also check for range constraints on this property
+                    for target_class in ontology.objects(prop_shape, SH['class']):
+                        if isinstance(target_class, URIRef):
+                            # This predicate points TO the target_class
+                            pass  # We'll handle this when checking that class
+                    
+                    for node_ref in ontology.objects(prop_shape, SH.node):
+                        # Check if this node reference has a targetClass
+                        for target_class in ontology.objects(node_ref, SH.targetClass):
+                            if isinstance(target_class, URIRef):
+                                pass  # We'll handle this when checking that class
+        
+        # SHACL: Check for NodeShapes that target this class (223 style)
+        for node_shape in ontology.subjects(SH.targetClass, check_class):
+            # Get properties defined in this NodeShape
+            for prop in ontology.objects(node_shape, SH.property):
+                # Get sh:path (the predicate)
+                for path in ontology.objects(prop, SH.path):
+                    if isinstance(path, URIRef):
+                        add_from_predicate(str(path), "shacl:targetClass", prop)
+        
+        # SHACL: Look for property shapes where sh:class points to this class
+        for property_shape in ontology.subjects(SH['class'], check_class):
             # Get sh:path from this property shape
             for path in ontology.objects(property_shape, SH.path):
                 if isinstance(path, URIRef):
-                    pred_str = str(path)
-                    if pred_str not in to_predicates_seen:
-                        to_predicates_seen.add(pred_str)
-                        pred_info = {
-                            "predicate": convert_to_prefixed(pred_str, parsed_graph),
-                            "comment": None,
-                            "source": "shacl:node"
-                        }
-                        # Try to get sh:name or sh:description
-                        for name in ontology.objects(property_shape, SH.name):
-                            pred_info["comment"] = str(name)
-                            break
-                        if not pred_info["comment"]:
-                            for desc in ontology.objects(property_shape, SH.description):
-                                pred_info["comment"] = str(desc)
-                                break
-                        result["to_predicates"].append(pred_info)
+                    add_to_predicate(str(path), "shacl:class", property_shape)
+        
+        # SHACL: Look for property shapes where sh:node points to a NodeShape targeting this class
+        for node_ref in ontology.subjects(SH.targetClass, check_class):
+            for property_shape in ontology.subjects(SH.node, node_ref):
+                # Get sh:path from this property shape
+                for path in ontology.objects(property_shape, SH.path):
+                    if isinstance(path, URIRef):
+                        add_to_predicate(str(path), "shacl:node", property_shape)
     
     return result

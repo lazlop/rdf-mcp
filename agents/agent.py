@@ -42,7 +42,7 @@ from scripts.metrics import (
 
 from scripts.utils import CsvLogger
 
-from agents.kgqa import sparql_query, mcp, toolset1_mcp
+from agents.kgqa import sparql_query, TOOLSETS
 
 
 RUN_UNTIL_RESULTS = True  # If True, run until results are found; else, single pass
@@ -103,6 +103,7 @@ class SimpleSparqlAgentMCP:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         config_file: Optional[str] = None,
+        toolset: Optional[str] = 'mcp',
         mcp_server_script: str = "../agents/kgqa.py",
         reasoning_model: bool = True,
     ):
@@ -128,7 +129,6 @@ class SimpleSparqlAgentMCP:
         self.total_tokens = 0
         self.messages = []
         self.max_iterations = max_iterations
-        self.toolset = FastMCPToolset(mcp)
         self.total_tokens_limit = total_tokens_limit
 
         # Load API credentials
@@ -147,6 +147,8 @@ class SimpleSparqlAgentMCP:
                 self.max_tool_calls = config.get('max_tool_calls', max_tool_calls)
                 self.mcp_server_script = config.get('mcp_server_script', mcp_server_script)
                 self.reasoning_model = config.get('reasoning_model', reasoning_model)
+                toolset_name = config.get('toolset', toolset)
+                self.toolset = FastMCPToolset(TOOLSETS.get(toolset_name))
                 print(config)
         
         self.is_remote = sparql_endpoint.lower().startswith("http")
@@ -464,6 +466,32 @@ class SimpleSparqlAgentMCP:
                         print(f"   🔄 Retrying ({i+1}/{self.max_iterations})...")
                         critique_feedback = f"Critique agent failed with error: {str(e)}. Please review and improve your query."
                         continue
+        except UsageLimitExceeded as e:
+            # Capture the usage information from the exception
+            print(f"❌ Token limit exceeded: {e}")
+            token_limit_exceeded = True
+            
+            # Parse token count from exception message
+            # Format: "Exceeded the total_tokens_limit of X (total_tokens=Y)"
+            import re
+            match = re.search(r'total_tokens=(\d+)', str(e))
+            if match:
+                tokens_at_limit = int(match.group(1))
+                self.total_tokens = tokens_at_limit
+                print(f"📊 Token usage at limit: {tokens_at_limit}/{self.total_tokens_limit}")
+                
+                # Optionally try to estimate prompt vs completion tokens
+                # This is a rough estimate assuming some ratio, or you could track running totals
+                # For now, we'll just set total_tokens and leave the breakdown unknown
+            else:
+                print(f"⚠️ Could not parse token count from exception: {e}")
+            
+            # Try to extract any partial query that was generated
+            last_sparql_query = os.getenv('LAST_SPARQL_QUERY', '')
+            if last_sparql_query:
+                generated_query = last_sparql_query
+                print("♻️ Using LAST_SPARQL_QUERY from environment.")
+
         except Exception as e:
             print(f"❌ Error during query generation: {e}")
             import traceback

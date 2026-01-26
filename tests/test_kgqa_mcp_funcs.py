@@ -21,8 +21,9 @@ from agents.kgqa import (
     get_building_summary,
     find_entities_by_type,
     get_relationship_between_classes,
-    fuzzy_search_concept,
+    find_similar_class_in_graph,
     get_sparql_prefixes,
+    describe_class,
     _ensure_graph_loaded
 )
 
@@ -229,17 +230,52 @@ def test_fuzzy_search():
     """Test 8: Fuzzy search"""
     print_section("TEST 8: Fuzzy Search")
     try:
-        results = fuzzy_search_concept("heating coil", search_type="classes", n_results=3)
+        results = find_similar_class_in_graph("heating coil", search_type="classes", n_results=3)
         print(f"✅ Fuzzy search results for 'heating coil':")
         pprint(results)
-        results = fuzzy_search_concept("heating coil", search_type="predicates", n_results=3)
+        results = find_similar_class_in_graph("heating coil", search_type="predicates", n_results=3)
         print(f"✅ Fuzzy search results for 'heating coil':")
         pprint(results)
-        results = fuzzy_search_concept("heating coil", search_type="both", n_results=3)
+        results = find_similar_class_in_graph("heating coil", search_type="both", n_results=3)
         print(f"✅ Fuzzy search results for 'heating coil':")
         pprint(results)
     except Exception as e:
         print(f"❌ Fuzzy search failed: {e}")
+
+def test_describe_class():
+    """Test 9: Describe class from ontology"""
+    print_section("TEST 9: Describe Class")
+    
+    # Test with various Brick classes
+    test_classes = [
+        ('brick:VAV', "VAV"),
+        ('brick:Temperature_Sensor', "Temperature_Sensor"),
+        ("brick:Air_Handling_Unit", "Air_Handling_Unit"),
+        ("brick:Equipment", "223:Equipment"),
+    ]
+    
+    for class_uri, class_name in test_classes:
+        try:
+            print(f"\n🔍 Testing class: {class_name}")
+            result = describe_class(str(class_uri))
+            
+            print(f"✅ Class: {result['class']}")
+            print(result)
+                
+        except Exception as e:
+            print(f"❌ Failed for {class_name}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # Test with an invalid class
+    print(f"\n🔍 Testing invalid class:")
+    try:
+        result = describe_class("http://example.com/InvalidClass")
+        print(f"⚠️  Result for invalid class:")
+        pprint(result)
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+
 def main():
     """Run all tests"""
     print("\n" + "🧪"*40)
@@ -256,14 +292,15 @@ def main():
     
     # Run tests
     tests = [
-        test_graph_loading,
-        test_building_summary,
-        test_find_entities_by_type,
-        test_entity_info,
-        test_sparql_query,
-        test_shortest_path,
-        test_error_handling,
-        test_fuzzy_search,
+        # test_graph_loading,
+        # test_building_summary,
+        # test_find_entities_by_type,
+        # test_entity_info,
+        # test_sparql_query,
+        # test_shortest_path,
+        # test_error_handling,
+        # test_fuzzy_search,
+        test_describe_class,
     ]
     
     results = []

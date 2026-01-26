@@ -34,7 +34,7 @@ def load_config(config_path: str) -> dict:
 def get_model_name_from_config(config_path: str) -> str:
     """Extract model name from config file."""
     config = load_config(config_path)
-    model_name = config.get("model", "unknown_model")
+    model_name = config.get("model", ["unknown_model"])[0]
     # Clean up model name for use in filename (replace slashes, colons, etc.)
     model_name = model_name.replace("/", "_").replace(":", "_").replace(" ", "_")
     return model_name
@@ -210,6 +210,7 @@ async def process_single_config(config_path: Path, results_dir: Path) -> Path:
     
     # Get model name from config
     model_name = get_model_name_from_config(str(config_path))
+    run_base_name = config.get('run-name', 'sparql_agent_run')
     
     print("\n" + "=" * 80)
     print("Starting SPARQL Agent Benchmark Run")
@@ -218,7 +219,7 @@ async def process_single_config(config_path: Path, results_dir: Path) -> Path:
     print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
 
-    logger, log_filename = create_timestamped_logger(results_dir, model_name)
+    logger, log_filename = create_timestamped_logger(results_dir, model_name, run_base_name)
     log_path = results_dir / log_filename
 
     if not benchmark_dir.is_dir():
