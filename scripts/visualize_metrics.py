@@ -164,7 +164,7 @@ def plot_performance_vs_tokens_scatter(
         test_overall_dict: Dict mapping test names to overall stats
         output_path: Where to save the figure
     """
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(6, 6))
     
     # Baseline markers (grays)
     baseline_colors = ['#A9A9A9', '#808080', '#696969', '#5C5C5C']
@@ -176,43 +176,45 @@ def plot_performance_vs_tokens_scatter(
     
     # Plot baselines
     for i, (name, stats) in enumerate(baseline_overall_dict.items()):
-        tokens = stats["total_tokens"]["mean"]
+        tokens = stats["total_tokens"]["mean"] / 1000000
         f1_score = stats["f1_scores"]["row_matching_f1"]["mean"]
         
         color = baseline_colors[i % len(baseline_colors)]
         marker = baseline_markers[i % len(baseline_markers)]
         ax.scatter(tokens, f1_score, label=f"{name}", 
-                  alpha=0.6, s=200, color=color, marker=marker, edgecolors='black', linewidth=1.5)
+                  alpha=0.6, s=250, color=color, marker=marker, edgecolors='black', linewidth=1.5)
         
         # Add label
-        ax.annotate(name, (tokens, f1_score), 
-                   fontsize=7, alpha=0.7, 
-                   xytext=(8, 8), textcoords='offset points')
+        # ax.annotate(name, (tokens, f1_score), 
+        #            fontsize=11, alpha=0.7, 
+        #            xytext=(8, 8), textcoords='offset points')
     
     # Plot test runs
     for i, (name, stats) in enumerate(test_overall_dict.items()):
-        tokens = stats["total_tokens"]["mean"]
+        tokens = stats["total_tokens"]["mean"]/ 1000000
         f1_score = stats["f1_scores"]["row_matching_f1"]["mean"]
         
         color = test_colors[i % len(test_colors)]
         marker = test_markers[i % len(test_markers)]
         ax.scatter(tokens, f1_score, label=name, 
-                  alpha=0.8, s=200, color=color, marker=marker, edgecolors='black', linewidth=1)
+                  alpha=0.8, s=250, color=color, marker=marker, edgecolors='black', linewidth=1)
         
         # Add label
-        ax.annotate(name, (tokens, f1_score), 
-                   fontsize=7, alpha=0.7, 
-                   xytext=(7, 2), textcoords='offset points')
+        # ax.annotate(name, (tokens, f1_score), 
+        #            fontsize=11, alpha=0.7, 
+        #            xytext=(7, 2), textcoords='offset points')
     
-    ax.set_xlabel('Mean Total Tokens', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Mean Row Matching F1', fontsize=12, fontweight='bold')
-    ax.set_title('Performance vs Token Usage', 
-                 fontsize=14, fontweight='bold')
-    ax.legend()
+    ax.set_xlabel('Mean Tokens (Millions)', fontsize=16, fontweight='bold')
+    ax.set_ylabel('Mean Row Matching F1', fontsize=16, fontweight='bold')
+    # ax.set_title('Performance vs Token Usage', 
+    #              fontsize=18, fontweight='bold', pad=15)
+    ax.legend(fontsize=12, loc='best')
     ax.grid(alpha=0.3)
-    ax.set_xlim(0,155000)
-    # ax.set_ylim(0, 1.0)  # Common y-axis for F1 scores
-    ax.set_ylim(0.2, 0.7)  # Common y-axis for F1 scores
+    # ax.set_xlim(0, 155000)
+    ax.set_ylim(0.2, 0.7)
+    
+    # Increase tick label sizes
+    ax.tick_params(axis='both', which='major', labelsize=14)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -233,7 +235,7 @@ def plot_all_f1_metrics_comparison(
     f1_metrics = ["arity_matching_f1", "exact_match_f1", "row_matching_f1", "entity_set_f1"]
     metric_titles = ["Arity Matching F1", "Exact Match F1", "Row Matching F1", "Entity Set F1"]
     
-    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     
     # Get all unique buildings
     all_buildings = set()
@@ -289,21 +291,25 @@ def plot_all_f1_metrics_comparison(
                    alpha=0.8, color=color)
             bar_idx += 1
         
-        ax.set_xlabel('Building', fontsize=11, fontweight='bold')
+        ax.set_xlabel('Building', fontsize=16, fontweight='bold')
         if idx == 0:
-            ax.set_ylabel('F1 Score', fontsize=11, fontweight='bold')
+            ax.set_ylabel('F1 Score', fontsize=16, fontweight='bold')
         else:
             ax.set_yticklabels([])  # Remove y-axis labels for non-leftmost plots
-        ax.set_title(title, fontsize=12, fontweight='bold')
+        # ax.set_title(title, fontsize=18, fontweight='bold', pad=10)
         ax.set_xticks(x)
-        ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=12)
+        ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=15)
+        
+        # Increase y-axis tick label size
         if idx == 0:
-            ax.legend(fontsize=11, loc='upper left')
+            ax.tick_params(axis='y', which='major', labelsize=14)
+            ax.legend(fontsize=13, loc='upper left')
+        
         ax.grid(axis='y', alpha=0.3)
         ax.set_ylim(0, 1.0)  # Common y-axis for all F1 scores
     
-    fig.suptitle('Performance Comparison Across Metrics (Mean)', 
-                 fontsize=16, fontweight='bold', y=1.02)
+    # fig.suptitle('Performance Comparison Across Metrics (Mean)', 
+    #              fontsize=22, fontweight='bold', y=1.00)
     plt.subplots_adjust(wspace=0.05)  # Make plots touch each other
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Multi-panel comparison saved to: {output_path}")
