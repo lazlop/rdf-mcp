@@ -164,7 +164,7 @@ def plot_performance_vs_tokens_scatter(
         test_overall_dict: Dict mapping test names to overall stats
         output_path: Where to save the figure
     """
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(6, 4.5))
     
     # Baseline markers (grays)
     baseline_colors = ['#A9A9A9', '#808080', '#696969', '#5C5C5C']
