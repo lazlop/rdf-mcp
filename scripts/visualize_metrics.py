@@ -204,10 +204,10 @@ def plot_performance_vs_tokens_scatter(
         #            fontsize=11, alpha=0.7, 
         #            xytext=(7, 2), textcoords='offset points')
     
-    ax.set_xlabel('Mean Tokens (Millions)', fontsize=16, fontweight='bold')
-    ax.set_ylabel('Mean Row Matching F1', fontsize=16, fontweight='bold')
+    ax.set_xlabel('Mean Tokens (Millions)', fontsize=16)
+    ax.set_ylabel('Mean Row Matching F1', fontsize=16)
     # ax.set_title('Performance vs Token Usage', 
-    #              fontsize=18, fontweight='bold', pad=15)
+    #              fontsize=18, pad=15)
     ax.legend(fontsize=12, loc='best')
     ax.grid(alpha=0.3)
     # ax.set_xlim(0, 155000)
@@ -291,12 +291,12 @@ def plot_all_f1_metrics_comparison(
                    alpha=0.8, color=color)
             bar_idx += 1
         
-        ax.set_xlabel('Building', fontsize=16, fontweight='bold')
+        ax.set_xlabel('Building', fontsize=16)
         if idx == 0:
-            ax.set_ylabel('F1 Score', fontsize=16, fontweight='bold')
+            ax.set_ylabel('F1 Score', fontsize=16)
         else:
             ax.set_yticklabels([])  # Remove y-axis labels for non-leftmost plots
-        # ax.set_title(title, fontsize=18, fontweight='bold', pad=10)
+        # ax.set_title(title, fontsize=18, pad=10)
         ax.set_xticks(x)
         ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=15)
         
@@ -309,7 +309,7 @@ def plot_all_f1_metrics_comparison(
         ax.set_ylim(0, 1.0)  # Common y-axis for all F1 scores
     
     # fig.suptitle('Performance Comparison Across Metrics (Mean)', 
-    #              fontsize=22, fontweight='bold', y=1.00)
+    #              fontsize=22, y=1.00)
     plt.subplots_adjust(wspace=0.05)  # Make plots touch each other
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Multi-panel comparison saved to: {output_path}")
