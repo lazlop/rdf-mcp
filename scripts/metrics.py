@@ -240,7 +240,7 @@ def _compute_single_col_f1(pred_values: set, gold_values: set) -> float:
 #  NEW PUBLIC METRIC
 # ==============================================================================
 
-def get_best_subset_column_f1(gold_rows: List[Dict], pred_rows: List[Dict]) -> float:
+def get_best_subset_column_f1(gold_rows: List[Dict], pred_rows: List[Dict], timeout: int = 1200) -> float:
     """
     Calculates the 'Best Subset' Column Score (Column Recall).
 
@@ -287,6 +287,7 @@ def get_best_subset_column_f1(gold_rows: List[Dict], pred_rows: List[Dict]) -> f
 
     # 3. Create Score Matrix (Pred x Gold)
     score_matrix = np.zeros((n_pred, n_gold))
+        
     for i in range(n_pred):
         for j in range(n_gold):
             score_matrix[i][j] = _compute_single_col_f1(pred_val_sets[i], gold_val_sets[j])
@@ -294,21 +295,33 @@ def get_best_subset_column_f1(gold_rows: List[Dict], pred_rows: List[Dict]) -> f
     # 4. Find Best Alignment
     max_total_score = 0.0
     
+    start_time = time.time()
     if n_pred <= n_gold:
         # Fewer predictions than gold (Under-generation): 
         # We try to find which Gold columns we actually found.
-        for gold_indices in itertools.permutations(range(n_gold), n_pred):
+        for gold_indices in itertools.permutations(range(n_gold), n_pred):        
+            if time.time() - start_time > timeout:
+                print(f"⚠️  Alignment search timed out after {timeout} seconds. Returning best result found.")
+                break
+            if (max_total_score /n_gold) == 1 :
+                break
             current_sum = sum(score_matrix[i][gold_indices[i]] for i in range(n_pred))
             if current_sum > max_total_score:
                 max_total_score = current_sum
+
     else:
         # More predictions than gold (Over-generation):
         # We pick the subset of Predictions that best match the Gold.
         for pred_indices in itertools.permutations(range(n_pred), n_gold):
+            if time.time() - start_time > timeout:
+                print(f"⚠️  Alignment search timed out after {timeout} seconds. Returning best result found.")
+                break
+            if (max_total_score /n_gold) == 1 :
+                break
             current_sum = sum(score_matrix[pred_indices[j]][j] for j in range(n_gold))
             if current_sum > max_total_score:
                 max_total_score = current_sum
-
+            
     # 5. Normalize by Gold Count (Recall-focused)
     # If we matched 2 gold columns perfectly, sum is 2.0. 
     # Divide by n_gold (2) = 1.0.

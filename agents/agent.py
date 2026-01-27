@@ -105,7 +105,7 @@ class SimpleSparqlAgentMCP:
         config_file: Optional[str] = None,
         toolset: Optional[str] = 'mcp',
         mcp_server_script: str = "../agents/kgqa.py",
-        reasoning_model: bool = True,
+        reasoning_model: bool = False,
     ):
         """
         Initialize the Simple SPARQL Agent with MCP support.

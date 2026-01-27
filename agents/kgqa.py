@@ -491,6 +491,7 @@ def _format_rdflib_results(qres) -> Dict[str, Any]:
         bindings.append(binding_row)
     
     return {"results": bindings, "variables": variables}
+
 def _timeout_handler(signum, frame):
     raise TimeoutError("SPARQL query timed out after 60 seconds")
 
