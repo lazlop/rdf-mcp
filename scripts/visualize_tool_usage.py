@@ -3,7 +3,7 @@
 Visualize Tool Usage Metrics
 
 This script creates visualizations for:
-- Tool impact on performance (delta F1)
+- Tool impact on performance (delta F1) broken down by building
 - Correlation between tool count and performance
 """
 
@@ -89,95 +89,150 @@ def compute_tool_success_correlation(data):
     return query_data
 
 
-def compute_tool_impact_stats(query_data, min_occurrences=5):
-    """Compute impact statistics for each tool."""
-    tool_stats = defaultdict(lambda: {
+def compute_tool_impact_stats_by_building(query_data, min_occurrences=5):
+    """Compute impact statistics for each tool broken down by building."""
+    tool_building_stats = defaultdict(lambda: defaultdict(lambda: {
         'with_tool_f1': [],
         'without_tool_f1': [],
         'usage_count': 0
-    })
+    }))
     
-    # Get all unique tools
+    # Get all unique tools and buildings
     all_tools = set()
+    all_buildings = set()
     for query in query_data:
         all_tools.update(query['tools'])
+        all_buildings.add(query['building'])
     
-    # For each tool, track F1 scores when present vs absent
+    # For each tool and building combination, track F1 scores when present vs absent
     for tool in all_tools:
-        for query in query_data:
-            if tool in query['tools']:
-                tool_stats[tool]['with_tool_f1'].append(query['row_f1'])
-                tool_stats[tool]['usage_count'] += 1
-            else:
-                tool_stats[tool]['without_tool_f1'].append(query['row_f1'])
+        for building in all_buildings:
+            building_queries = [q for q in query_data if q['building'] == building]
+            for query in building_queries:
+                if tool in query['tools']:
+                    tool_building_stats[tool][building]['with_tool_f1'].append(query['row_f1'])
+                    tool_building_stats[tool][building]['usage_count'] += 1
+                else:
+                    tool_building_stats[tool][building]['without_tool_f1'].append(query['row_f1'])
     
     # Compute statistics
-    tool_metrics = {}
-    for tool, stats in tool_stats.items():
-        if stats['usage_count'] >= min_occurrences:
-            with_f1 = statistics.mean(stats['with_tool_f1']) if stats['with_tool_f1'] else 0
-            without_f1 = statistics.mean(stats['without_tool_f1']) if stats['without_tool_f1'] else 0
-            
-            tool_metrics[tool] = {
-                'with_f1': with_f1,
-                'without_f1': without_f1,
-                'delta_f1': with_f1 - without_f1,
-                'usage_count': stats['usage_count'],
-                'with_count': len(stats['with_tool_f1']),
-                'without_count': len(stats['without_tool_f1'])
-            }
+    tool_metrics = defaultdict(dict)
+    for tool, building_stats in tool_building_stats.items():
+        # Check if tool meets minimum occurrence threshold across all buildings
+        total_usage = sum(stats['usage_count'] for stats in building_stats.values())
+        if total_usage >= min_occurrences:
+            for building, stats in building_stats.items():
+                if stats['with_tool_f1']:  # Only include if tool was used with this building
+                    with_f1 = statistics.mean(stats['with_tool_f1'])
+                    without_f1 = statistics.mean(stats['without_tool_f1']) if stats['without_tool_f1'] else 0
+                    
+                    # Calculate standard error for delta F1
+                    # Using bootstrap-style approximation for SEM of difference
+                    with_std = statistics.stdev(stats['with_tool_f1']) if len(stats['with_tool_f1']) > 1 else 0
+                    without_std = statistics.stdev(stats['without_tool_f1']) if len(stats['without_tool_f1']) > 1 else 0
+                    
+                    with_sem = with_std / np.sqrt(len(stats['with_tool_f1'])) if len(stats['with_tool_f1']) > 0 else 0
+                    without_sem = without_std / np.sqrt(len(stats['without_tool_f1'])) if len(stats['without_tool_f1']) > 0 else 0
+                    
+                    # Standard error of difference (assuming independence)
+                    delta_sem = np.sqrt(with_sem**2 + without_sem**2)
+                    
+                    tool_metrics[tool][building] = {
+                        'with_f1': with_f1,
+                        'without_f1': without_f1,
+                        'delta_f1': with_f1 - without_f1,
+                        'delta_sem': delta_sem,
+                        'usage_count': stats['usage_count'],
+                        'with_count': len(stats['with_tool_f1']),
+                        'without_count': len(stats['without_tool_f1'])
+                    }
     
     return tool_metrics
 
 
 # ----------------------------------------------------------------------
-# Visualization 1: Tool impact on performance
+# Visualization 1: Tool impact on performance (by building)
 # ----------------------------------------------------------------------
 def plot_tool_impact(tool_metrics, output_path="tool_impact.png"):
-    """Create visualization showing tool impact on performance."""
+    """Create visualization showing tool impact on performance broken down by building."""
     
     if not tool_metrics:
         print("No tool metrics to plot")
         return
     
-    # Sort tools by delta F1 (impact on performance)
-    sorted_tools = sorted(tool_metrics.items(), 
-                        key=lambda x: x[1]['delta_f1'], 
-                        reverse=True)
+    # Get all buildings
+    all_buildings = set()
+    for tool_data in tool_metrics.values():
+        all_buildings.update(tool_data.keys())
+    buildings = sorted(all_buildings)
     
-    tools = [t[0] for t in sorted_tools]
-    delta_f1s = [t[1]['delta_f1'] for t in sorted_tools]
-    with_counts = [t[1]['with_count'] for t in sorted_tools]
-    without_counts = [t[1]['without_count'] for t in sorted_tools]
+    # Calculate average delta F1 across buildings for sorting
+    tool_avg_delta = {}
+    for tool, building_data in tool_metrics.items():
+        deltas = [data['delta_f1'] for data in building_data.values()]
+        tool_avg_delta[tool] = statistics.mean(deltas) if deltas else 0
     
-    # Create figure - sized for single column (typically ~3.5 inches wide)
-    fig, ax = plt.subplots(figsize=(5, 4))
+    # Sort tools by average delta F1
+    sorted_tools = sorted(tool_avg_delta.keys(), 
+                         key=lambda x: tool_avg_delta[x], 
+                         reverse=True)
     
-    # Delta F1 (impact on performance)
-    colors = ['#2ca02c' if d > 0 else '#d62728' for d in delta_f1s]
-    bars = ax.barh(tools, delta_f1s, color=colors, alpha=0.7, 
-                   edgecolor='black', linewidth=0.5)
+    # Prepare data for grouped bar chart
+    n_tools = len(sorted_tools)
+    n_buildings = len(buildings)
     
+    # Create figure
+    fig, ax = plt.subplots(figsize=(6, max(4, n_tools * 0.4)))
+    
+    # Set up bar positions
+    bar_height = 0.8 / n_buildings
+    y_positions = np.arange(n_tools)
+    
+    # Color palette for buildings
+    colors = plt.cm.Set3(np.linspace(0, 1, n_buildings))
+    
+    # Plot bars for each building
+    for i, building in enumerate(buildings):
+        deltas = []
+        errors = []
+        for tool in sorted_tools:
+            if building in tool_metrics[tool]:
+                deltas.append(tool_metrics[tool][building]['delta_f1'])
+                errors.append(tool_metrics[tool][building]['delta_sem'])
+            else:
+                deltas.append(np.nan)  # No data for this building/tool combo
+                errors.append(0)
+        
+        y_pos = y_positions + (i - n_buildings/2 + 0.5) * bar_height
+        bars = ax.barh(y_pos, deltas, bar_height, 
+                      label=building, color=colors[i], alpha=0.8,
+                      edgecolor='black', linewidth=0.5)
+        
+        # Add error bars (inconspicuous style)
+        for j, (y, delta, error) in enumerate(zip(y_pos, deltas, errors)):
+            if not np.isnan(delta) and error > 0:
+                ax.errorbar(delta, y, xerr=error, 
+                           fmt='none', ecolor='gray', 
+                           capsize=2, capthick=0.5, 
+                           linewidth=0.8, alpha=0.5, zorder=10)
+    
+    # Add vertical line at x=0
     ax.axvline(x=0, color='black', linewidth=1, linestyle='-', alpha=0.3)
+    
+    # Formatting
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(sorted_tools, fontsize=8)
     ax.set_xlabel('ΔF1 Score\n(With Tool − Without Tool)', fontsize=10)
-    # ax.set_title('Tool Impact on Performance', fontsize=11, pad=10)
     ax.grid(axis='x', alpha=0.3, linewidth=0.5)
+    ax.legend(loc='best', fontsize=8, framealpha=0.9)
     
     # Set x-axis limits
-    ax.set_xlim(-0.5, 1.0)
-    
-    # Adjust tick label size
-    ax.tick_params(axis='y', labelsize=8)
-    ax.tick_params(axis='x', labelsize=9)
-    
-    # Add value labels with sample counts - more compact format
-    for i, (tool, delta, with_n, without_n) in enumerate(zip(tools, delta_f1s, with_counts, without_counts)):
-        x_pos = delta + (0.02 if delta > 0 else -0.02)
-        ha = 'left' if delta > 0 else 'right'
-        # Combine into single line for space efficiency
-        label = f'{delta:+.2f}\n(n={with_n}/{without_n})'
-        ax.text(x_pos, i, label, 
-                va='center', ha=ha, fontsize=7)
+    all_deltas = [data['delta_f1'] for tool_data in tool_metrics.values() 
+                  for data in tool_data.values()]
+    if all_deltas:
+        x_min = min(min(all_deltas), -0.1)
+        x_max = max(max(all_deltas), 0.1)
+        ax.set_xlim(x_min - 0.2, x_max + 0.2)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -230,13 +285,11 @@ def plot_correlation_heatmap(query_data, output_path="correlation_heatmap.png"):
     ax.set_yticklabels(buildings, fontsize=9)
     ax.set_xticks([0])
     ax.set_xticklabels(['Tool Count vs. F1'], fontsize=9)
-    # ax.set_title('Correlation: Tool Usage and Performance', fontsize=11, pad=10)
     
     # Add correlation values as text with sample size
     for i, (corr, p_val, n) in enumerate(zip(correlations, p_values, sample_sizes)):
         color = 'white' if abs(corr) > 0.5 else 'black'
         significance = '*' if p_val < 0.05 else ''
-        # More compact format
         ax.text(0, i, f'{corr:.2f}{significance}\n(n={n})', 
                 ha='center', va='center', color=color, fontsize=8)
     
@@ -244,11 +297,6 @@ def plot_correlation_heatmap(query_data, output_path="correlation_heatmap.png"):
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label('Pearson r', rotation=270, labelpad=15, fontsize=9)
     cbar.ax.tick_params(labelsize=8)
-    
-    # Add note about significance - smaller font
-    # fig.text(0.5, -0.02, '* p < 0.05', 
-    #         ha='center', fontsize=7, style='italic',
-    #         transform=ax.transAxes)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -296,7 +344,7 @@ def main():
     # Compute metrics
     print("\nComputing metrics...")
     query_data = compute_tool_success_correlation(data)
-    tool_impact = compute_tool_impact_stats(query_data, args.min_tool_occurrences)
+    tool_impact = compute_tool_impact_stats_by_building(query_data, args.min_tool_occurrences)
     
     print(f"  Analyzed {len(tool_impact)} tools (min {args.min_tool_occurrences} occurrences)")
     
