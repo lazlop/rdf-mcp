@@ -296,7 +296,7 @@ def plot_all_f1_metrics_comparison(
             ax.set_ylabel('F1 Score', fontsize=16)
         else:
             ax.set_yticklabels([])  # Remove y-axis labels for non-leftmost plots
-        # ax.set_title(title, fontsize=18, pad=10)
+        ax.set_title(title, fontsize=18, pad=10)
         ax.set_xticks(x)
         ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=15)
         
