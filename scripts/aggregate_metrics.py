@@ -146,7 +146,7 @@ def compute_aggregate_metrics(data):
         md["row_matching_f1"].append(row_f1)
         md["best_subset_column_f1"].append(best_subset_f1)
 
-        # ----- by building (new) -----
+        # ----- by building -----
         building = query_id.split("_")[0] if "_" in query_id else query_id
         bd = metrics["by_building"][building]
         bd["count"] += 1
