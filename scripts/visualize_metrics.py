@@ -149,93 +149,6 @@ def compute_overall_metrics(data):
 
 
 # ----------------------------------------------------------------------
-# Bar chart: Mean by Building with baseline/test distinction
-# ----------------------------------------------------------------------
-def plot_building_comparison_bars(
-    baseline_dict: Dict[str, dict],
-    test_dict: Dict[str, dict],
-    f1_metric: str = "exact_match_f1",
-    output_path: str = "building_comparison.png"
-):
-    """
-    Create grouped bar chart comparing mean F1 scores by building across CSVs.
-    
-    Args:
-        baseline_dict: Dict mapping baseline names to building stats
-        test_dict: Dict mapping test names to building stats
-        f1_metric: Which F1 metric to plot
-        output_path: Where to save the figure
-    """
-    # Get all unique buildings across all CSVs
-    all_buildings = set()
-    for stats in list(baseline_dict.values()) + list(test_dict.values()):
-        all_buildings.update(stats.keys())
-    buildings = sorted(all_buildings)
-    
-    # Prepare data
-    x = np.arange(len(buildings))
-    total_bars = len(baseline_dict) + len(test_dict)
-    width = 0.8 / total_bars  # Width of bars
-    
-    fig, ax = plt.subplots(figsize=(14, 4))
-    
-    # Baseline colors (grays) and patterns
-    baseline_colors = ['#A9A9A9', '#808080', '#696969', '#5C5C5C']
-    hatches = ['///', '\\\\\\', '|||', '---']
-    
-    # Test colors (vibrant)
-    test_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
-    
-    bar_idx = 0
-    
-    # Plot baselines first
-    for i, (name, stats) in enumerate(baseline_dict.items()):
-        means = []
-        for building in buildings:
-            if building in stats:
-                means.append(stats[building]["f1_scores"][f1_metric]["mean"])
-            else:
-                means.append(0.0)
-        
-        offset = width * (bar_idx - total_bars / 2 + 0.5)
-        color = baseline_colors[i % len(baseline_colors)]
-        hatch = hatches[i % len(hatches)]
-        ax.bar(x + offset, means, width, label=f"{name}", 
-               alpha=0.7, color=color, hatch=hatch, edgecolor='black', linewidth=0.5)
-        bar_idx += 1
-    
-    # Plot test runs
-    for i, (name, stats) in enumerate(test_dict.items()):
-        means = []
-        for building in buildings:
-            if building in stats:
-                means.append(stats[building]["f1_scores"][f1_metric]["mean"])
-            else:
-                means.append(0.0)
-        
-        offset = width * (bar_idx - total_bars / 2 + 0.5)
-        color = test_colors[i % len(test_colors)]
-        ax.bar(x + offset, means, width, label=name, 
-               alpha=0.8, color=color)
-        bar_idx += 1
-    
-    ax.set_xlabel('Building', fontsize=12, fontweight='bold')
-    ax.set_ylabel(f'{f1_metric.replace("_", " ").title()}', fontsize=12, fontweight='bold')
-    ax.set_title(f'Performance Comparison by Building\n({f1_metric.replace("_", " ").title()})', 
-                 fontsize=14, fontweight='bold')
-    ax.set_xticks(x)
-    ax.set_xticklabels(buildings, rotation=45, ha='right')
-    ax.legend()
-    ax.grid(axis='y', alpha=0.3)
-    ax.set_ylim(0, 1.0)  # Common y-axis for F1 scores
-    
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Bar chart saved to: {output_path}")
-    plt.close()
-
-
-# ----------------------------------------------------------------------
 # Scatter plot: Mean Performance vs Token Count (Overall)
 # ----------------------------------------------------------------------
 def plot_performance_vs_tokens_scatter(
@@ -320,7 +233,7 @@ def plot_all_f1_metrics_comparison(
     f1_metrics = ["arity_matching_f1", "exact_match_f1", "row_matching_f1", "entity_set_f1"]
     metric_titles = ["Arity Matching F1", "Exact Match F1", "Row Matching F1", "Entity Set F1"]
     
-    fig, axes = plt.subplots(1, 4, figsize=(24, 4))
+    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
     
     # Get all unique buildings
     all_buildings = set()
@@ -383,9 +296,9 @@ def plot_all_f1_metrics_comparison(
             ax.set_yticklabels([])  # Remove y-axis labels for non-leftmost plots
         ax.set_title(title, fontsize=12, fontweight='bold')
         ax.set_xticks(x)
-        ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=9)
+        ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=12)
         if idx == 0:
-            ax.legend(fontsize=9, loc='upper left')
+            ax.legend(fontsize=11, loc='upper left')
         ax.grid(axis='y', alpha=0.3)
         ax.set_ylim(0, 1.0)  # Common y-axis for all F1 scores
     
@@ -394,96 +307,6 @@ def plot_all_f1_metrics_comparison(
     plt.subplots_adjust(wspace=0.05)  # Make plots touch each other
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Multi-panel comparison saved to: {output_path}")
-    plt.close()
-
-
-# ----------------------------------------------------------------------
-# Single-row multi-panel visualization with selected metrics (CV)
-# ----------------------------------------------------------------------
-def plot_all_f1_metrics_cv_comparison(
-    baseline_dict: Dict[str, dict],
-    test_dict: Dict[str, dict],
-    output_path: str = "all_metrics_cv_comparison.png"
-):
-    """Create a single-row figure comparing selected F1 metrics (coefficient of variation values)."""
-    # Metrics in specified order: arity, exact match, row match, entity set
-    f1_metrics = ["arity_matching_f1", "exact_match_f1", "row_matching_f1", "entity_set_f1"]
-    metric_titles = ["Arity Matching F1", "Exact Match F1", "Row Matching F1", "Entity Set F1"]
-    
-    fig, axes = plt.subplots(1, 4, figsize=(24, 5))
-    
-    # Get all unique buildings
-    all_buildings = set()
-    for stats in list(baseline_dict.values()) + list(test_dict.values()):
-        all_buildings.update(stats.keys())
-    buildings = sorted(all_buildings)
-    
-    x = np.arange(len(buildings))
-    total_bars = len(baseline_dict) + len(test_dict)
-    width = 0.8 / total_bars
-    
-    # Baseline colors and patterns
-    baseline_colors = ['#A9A9A9', '#808080', '#696969', '#5C5C5C']
-    hatches = ['///', '\\\\\\', '|||', '---']
-    
-    # Test colors
-    test_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
-    
-    for idx, (f1_metric, title) in enumerate(zip(f1_metrics, metric_titles)):
-        ax = axes[idx]
-        bar_idx = 0
-        
-        # Plot baselines
-        for i, (name, stats) in enumerate(baseline_dict.items()):
-            cvs = []
-            for building in buildings:
-                if building in stats:
-                    cvs.append(stats[building]["f1_scores"][f1_metric]["cv"])
-                else:
-                    cvs.append(0.0)
-            
-            offset = width * (bar_idx - total_bars / 2 + 0.5)
-            color = baseline_colors[i % len(baseline_colors)]
-            hatch = hatches[i % len(hatches)]
-            label = f"{name}" if idx == 0 else None
-            ax.bar(x + offset, cvs, width, label=label, 
-                   alpha=0.7, color=color, hatch=hatch, edgecolor='black', linewidth=0.5)
-            bar_idx += 1
-        
-        # Plot test runs
-        for i, (name, stats) in enumerate(test_dict.items()):
-            cvs = []
-            for building in buildings:
-                if building in stats:
-                    cvs.append(stats[building]["f1_scores"][f1_metric]["cv"])
-                else:
-                    cvs.append(0.0)
-            
-            offset = width * (bar_idx - total_bars / 2 + 0.5)
-            color = test_colors[i % len(test_colors)]
-            label = name if idx == 0 else None
-            ax.bar(x + offset, cvs, width, label=label, 
-                   alpha=0.8, color=color)
-            bar_idx += 1
-        
-        ax.set_xlabel('Building', fontsize=11, fontweight='bold')
-        if idx == 0:
-            ax.set_ylabel('Coefficient of Variation', fontsize=11, fontweight='bold')
-        else:
-            ax.set_yticklabels([])  # Remove y-axis labels for non-leftmost plots
-        ax.set_title(title, fontsize=12, fontweight='bold')
-        ax.set_xticks(x)
-        ax.set_xticklabels(buildings, rotation=45, ha='right', fontsize=9)
-        if idx == 0:
-            ax.legend(fontsize=9, loc='upper left')
-        ax.grid(axis='y', alpha=0.3)
-        # Auto-scale y-axis for CV
-    
-    fig.suptitle('Performance Variability Across Metrics (Coefficient of Variation)', 
-                 fontsize=16, fontweight='bold', y=1.02)
-    plt.subplots_adjust(wspace=0.05)  # Make plots touch each other
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Multi-panel CV comparison saved to: {output_path}")
     plt.close()
 
 
@@ -567,13 +390,7 @@ def main():
     
     # Generate visualizations
     print("\nGenerating visualizations...")
-    
-    plot_building_comparison_bars(
-        baseline_dict,
-        test_dict,
-        f1_metric=args.f1_metric,
-        output_path=str(output_dir / f"building_comparison_{args.f1_metric}.png")
-    )
+
     
     plot_performance_vs_tokens_scatter(
         baseline_overall_dict,
@@ -585,12 +402,6 @@ def main():
         baseline_dict,
         test_dict,
         output_path=str(output_dir / "all_metrics_comparison.png")
-    )
-    
-    plot_all_f1_metrics_cv_comparison(
-        baseline_dict,
-        test_dict,
-        output_path=str(output_dir / "all_metrics_cv_comparison.png")
     )
     
     print("\nAll visualizations complete!")
