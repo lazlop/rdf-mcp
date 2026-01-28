@@ -38,6 +38,81 @@ def convert_to_numeric(value, default=0.0):
 # ----------------------------------------------------------------------
 # Building-level metrics computation
 # ----------------------------------------------------------------------
+def compute_oracle_building_metrics(all_file_metrics: Dict[str, Dict[str, dict]]):
+    """
+    Compute oracle (maximum) scores per building by taking the best score
+    from any model for each question.
+    
+    Returns:
+        Dict with building-level oracle statistics (same format as compute_building_metrics)
+    """
+    # Organize by building
+    by_building = defaultdict(lambda: {
+        "arity_matching_f1": [],
+        "exact_match_f1": [],
+        "entity_set_f1": [],
+        "row_matching_f1": []
+    })
+    
+    # Get all unique questions
+    all_questions = set()
+    for file_metrics in all_file_metrics.values():
+        all_questions.update(file_metrics.keys())
+    
+    # For each question, find max score and assign to building
+    for question in all_questions:
+        # Find which building this question belongs to
+        building = None
+        for file_metrics in all_file_metrics.values():
+            if question in file_metrics:
+                query_id = file_metrics[question]["query_id"]
+                building = query_id.split("_")[0] if "_" in query_id else query_id
+                break
+        
+        if not building:
+            continue
+        
+        # Collect max scores across all models for this question
+        max_scores = {
+            "arity_matching_f1": 0.0,
+            "exact_match_f1": 0.0,
+            "entity_set_f1": 0.0,
+            "row_matching_f1": 0.0
+        }
+        
+        for file_metrics in all_file_metrics.values():
+            if question in file_metrics:
+                for metric in max_scores.keys():
+                    max_scores[metric] = max(max_scores[metric], 
+                                            file_metrics[question][metric])
+        
+        # Add to building
+        for metric in max_scores.keys():
+            by_building[building][metric].append(max_scores[metric])
+    
+    # Compute statistics per building
+    oracle_stats = {}
+    for building, metrics in by_building.items():
+        oracle_stats[building] = {
+            "count": len(metrics["row_matching_f1"]),
+            "f1_scores": {}
+        }
+        
+        for f1_type in ["arity_matching_f1", "exact_match_f1", "entity_set_f1", 
+                        "row_matching_f1"]:
+            values = metrics[f1_type]
+            mean_val = statistics.mean(values) if values else 0.0
+            stdev_val = statistics.stdev(values) if len(values) > 1 else 0.0
+            cv_val = (stdev_val / mean_val) if mean_val > 0 else 0.0
+            
+            oracle_stats[building]["f1_scores"][f1_type] = {
+                "mean": mean_val,
+                "stdev": stdev_val,
+                "cv": cv_val
+            }
+    
+    return oracle_stats
+
 def compute_building_metrics(data):
     """Compute building-level metrics from CSV data."""
     by_building = defaultdict(lambda: {
@@ -228,6 +303,7 @@ def plot_performance_vs_tokens_scatter(
 def plot_all_f1_metrics_comparison(
     baseline_dict: Dict[str, dict],
     test_dict: Dict[str, dict],
+    oracle_dict: Dict[str, dict] = None,  # NEW: Add oracle parameter
     output_path: str = "all_metrics_comparison.png"
 ):
     """Create a single-row figure comparing selected F1 metrics (mean values)."""
@@ -245,6 +321,8 @@ def plot_all_f1_metrics_comparison(
     
     x = np.arange(len(buildings))
     total_bars = len(baseline_dict) + len(test_dict)
+    if oracle_dict:
+        total_bars += 1  # Add one for oracle
     width = 0.8 / total_bars
     
     # Baseline colors and patterns
@@ -253,6 +331,9 @@ def plot_all_f1_metrics_comparison(
     
     # Test colors
     test_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    
+    # Oracle color (gold/yellow to stand out)
+    oracle_color = '#FFD700'
     
     for idx, (f1_metric, title) in enumerate(zip(f1_metrics, metric_titles)):
         ax = axes[idx]
@@ -291,6 +372,20 @@ def plot_all_f1_metrics_comparison(
                    alpha=0.8, color=color)
             bar_idx += 1
         
+        # NEW: Plot oracle
+        if oracle_dict:
+            means = []
+            for building in buildings:
+                if building in oracle_dict:
+                    means.append(oracle_dict[building]["f1_scores"][f1_metric]["mean"])
+                else:
+                    means.append(0.0)
+            
+            offset = width * (bar_idx - total_bars / 2 + 0.5)
+            label = "Oracle" if idx == 0 else None
+            ax.bar(x + offset, means, width, label=label, 
+                   alpha=0.9, color=oracle_color, edgecolor='black', linewidth=1.5)
+        
         ax.set_xlabel('Building', fontsize=16)
         if idx == 0:
             ax.set_ylabel('F1 Score', fontsize=16)
@@ -308,8 +403,6 @@ def plot_all_f1_metrics_comparison(
         ax.grid(axis='y', alpha=0.3)
         ax.set_ylim(0, 1.0)  # Common y-axis for all F1 scores
     
-    # fig.suptitle('Performance Comparison Across Metrics (Mean)', 
-    #              fontsize=22, y=1.00)
     plt.subplots_adjust(wspace=0.05)  # Make plots touch each other
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Multi-panel comparison saved to: {output_path}")
@@ -720,13 +813,54 @@ def main():
         test_overall_dict[name] = overall_stats
         print(f"  Loaded {len(data)} records, {len(building_stats)} buildings")
     
+    print("\nComputing oracle (maximum achievable) scores...")
+    all_file_metrics = {}
+    
+    # Collect from baselines
+    for name in baseline_dict.keys():
+        csv_path = None
+        for arg in args.baseline:
+            if ':' in arg:
+                arg_name, arg_path = arg.split(':', 1)
+                if arg_name == name:
+                    csv_path = arg_path
+                    break
+            else:
+                if Path(arg).stem == name:
+                    csv_path = arg
+                    break
+        
+        if csv_path:
+            data = load_csv_data(csv_path)
+            all_file_metrics[name] = compute_per_question_metrics(data, name)
+    
+    # Collect from tests
+    for name in test_dict.keys():
+        csv_path = None
+        for arg in args.test:
+            if ':' in arg:
+                arg_name, arg_path = arg.split(':', 1)
+                if arg_name == name:
+                    csv_path = arg_path
+                    break
+            else:
+                if Path(arg).stem == name:
+                    csv_path = arg
+                    break
+        
+        if csv_path:
+            data = load_csv_data(csv_path)
+            all_file_metrics[name] = compute_per_question_metrics(data, name)
+
     # Create output directory
     output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
     
     # Generate visualizations
     print("\nGenerating visualizations...")
-
+    # Compute oracle building-level metrics
+    oracle_dict = compute_oracle_building_metrics(all_file_metrics)
+    
     
     plot_performance_vs_tokens_scatter(
         baseline_overall_dict,
@@ -737,8 +871,10 @@ def main():
     plot_all_f1_metrics_comparison(
         baseline_dict,
         test_dict,
+        oracle_dict=oracle_dict,  # NEW: Pass oracle data
         output_path=str(output_dir / "all_metrics_comparison.png")
     )
+    
     
     print("\nAll visualizations complete!")
 # NEW: Per-question similarity analysis
