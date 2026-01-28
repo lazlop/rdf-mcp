@@ -314,8 +314,338 @@ def plot_all_f1_metrics_comparison(
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Multi-panel comparison saved to: {output_path}")
     plt.close()
+# ----------------------------------------------------------------------
+# Per-question comparison across files
+# ----------------------------------------------------------------------
+def compute_per_question_metrics(data, file_label):
+    """Compute metrics for each unique question."""
+    question_metrics = {}
+    
+    for row in data:
+        query_id = row.get("query_id", "unknown")
+        question = row.get("question", "")
+        
+        # Use question text as the unique key (query_id can repeat)
+        unique_key = question.strip()
+        
+        if not unique_key:
+            continue
+            
+        row_f1 = convert_to_numeric(row.get("row_matching_f1"))
+        
+        question_metrics[unique_key] = {
+            "query_id": query_id,
+            "file": file_label,
+            "row_matching_f1": row_f1,
+            "arity_matching_f1": convert_to_numeric(row.get("arity_matching_f1")),
+            "exact_match_f1": convert_to_numeric(row.get("exact_match_f1")),
+            "entity_set_f1": convert_to_numeric(row.get("entity_set_f1"))
+        }
+    
+    return question_metrics
 
 
+def compute_similarity_metrics(all_file_metrics: Dict[str, Dict[str, dict]]):
+    """
+    Compute single metrics to assess whether models perform similarly per question.
+    
+    Returns:
+        Dict with overall similarity metrics
+    """
+    # Get all unique questions
+    all_questions = set()
+    for file_metrics in all_file_metrics.values():
+        all_questions.update(file_metrics.keys())
+    
+    # Collect per-question statistics
+    per_question_cvs = []
+    per_question_ranges = []
+    per_question_stdevs = []
+    
+    for question in all_questions:
+        scores = []
+        
+        # Collect scores from each file
+        for file_name, metrics in all_file_metrics.items():
+            if question in metrics:
+                score = metrics[question]["row_matching_f1"]
+                scores.append(score)
+        
+        # Only analyze if question appears in multiple files
+        if len(scores) > 1:
+            mean_score = statistics.mean(scores)
+            stdev_score = statistics.stdev(scores)
+            cv_score = (stdev_score / mean_score) if mean_score > 0 else 0.0
+            score_range = max(scores) - min(scores)
+            
+            per_question_cvs.append(cv_score)
+            per_question_ranges.append(score_range)
+            per_question_stdevs.append(stdev_score)
+    
+    # Compute overall similarity metrics
+    if not per_question_cvs:
+        return None
+    
+    # Primary metric: Mean Coefficient of Variation across all questions
+    # Lower = more similar performance across models
+    mean_cv = statistics.mean(per_question_cvs)
+    median_cv = statistics.median(per_question_cvs)
+    
+    # Secondary metric: Mean absolute difference (range) across questions
+    mean_range = statistics.mean(per_question_ranges)
+    median_range = statistics.median(per_question_ranges)
+    
+    # Tertiary metric: Mean standard deviation
+    mean_stdev = statistics.mean(per_question_stdevs)
+    
+    # Concordance metric: Percentage of questions with low variance
+    # CV < 0.1 means models agree closely on that question
+    low_variance_threshold = 0.1
+    num_concordant = sum(1 for cv in per_question_cvs if cv < low_variance_threshold)
+    concordance_rate = num_concordant / len(per_question_cvs)
+    
+    # High variance questions
+    high_variance_threshold = 0.5
+    num_discordant = sum(1 for cv in per_question_cvs if cv > high_variance_threshold)
+    discordance_rate = num_discordant / len(per_question_cvs)
+    
+    return {
+        "mean_cv": mean_cv,
+        "median_cv": median_cv,
+        "mean_range": mean_range,
+        "median_range": median_range,
+        "mean_stdev": mean_stdev,
+        "concordance_rate": concordance_rate,
+        "discordance_rate": discordance_rate,
+        "num_questions": len(per_question_cvs),
+        "num_concordant": num_concordant,
+        "num_discordant": num_discordant
+    }
+
+
+
+def identify_discordant_questions(
+    all_file_metrics: Dict[str, Dict[str, dict]],
+    top_n: int = 10
+):
+    """
+    Identify questions where models disagree most.
+    
+    Returns list of (question, cv, scores_dict) tuples
+    """
+    all_questions = set()
+    for file_metrics in all_file_metrics.values():
+        all_questions.update(file_metrics.keys())
+    
+    question_variance = []
+    
+    for question in all_questions:
+        scores_dict = {}
+        scores = []
+        
+        for file_name, metrics in all_file_metrics.items():
+            if question in metrics:
+                score = metrics[question]["row_matching_f1"]
+                scores.append(score)
+                scores_dict[file_name] = score
+        
+        if len(scores) > 1:
+            mean_score = statistics.mean(scores)
+            stdev_score = statistics.stdev(scores)
+            cv_score = (stdev_score / mean_score) if mean_score > 0 else 0.0
+            
+            question_variance.append((question, cv_score, scores_dict))
+    
+    # Sort by CV (highest variance first)
+    question_variance.sort(key=lambda x: x[1], reverse=True)
+    
+    return question_variance[:top_n]
+
+
+def print_discordant_questions(discordant_questions: List[Tuple], max_question_len: int = 80):
+    """Print questions where models disagree most."""
+    print("\n" + "="*70)
+    print("TOP DISCORDANT QUESTIONS (Highest Disagreement)")
+    print("="*70)
+    
+    for i, (question, cv, scores_dict) in enumerate(discordant_questions, 1):
+        # Truncate long questions
+        display_question = question[:max_question_len] + "..." if len(question) > max_question_len else question
+        
+        print(f"\n{i}. Question: {display_question}")
+        print(f"   CV: {cv:.4f}")
+        print(f"   Scores by file:")
+        for file_name, score in sorted(scores_dict.items()):
+            print(f"     {file_name}: {score:.4f}")
+    
+    print("="*70 + "\n")
+
+def compute_oracle_scores(all_file_metrics: Dict[str, Dict[str, dict]]):
+    """
+    Compute the maximum possible F1 scores by taking the best score 
+    from any model for each question (oracle/upper bound).
+    
+    Returns:
+        Dict with oracle scores for each metric
+    """
+    # Get all unique questions
+    all_questions = set()
+    for file_metrics in all_file_metrics.values():
+        all_questions.update(file_metrics.keys())
+    
+    # For each metric, collect the max score across models for each question
+    oracle_scores = {
+        "row_matching_f1": [],
+        "arity_matching_f1": [],
+        "exact_match_f1": [],
+        "entity_set_f1": []
+    }
+    
+    for question in all_questions:
+        # Collect all scores for this question across models
+        question_scores = {
+            "row_matching_f1": [],
+            "arity_matching_f1": [],
+            "exact_match_f1": [],
+            "entity_set_f1": []
+        }
+        
+        for file_name, metrics in all_file_metrics.items():
+            if question in metrics:
+                for metric_name in oracle_scores.keys():
+                    score = metrics[question][metric_name]
+                    question_scores[metric_name].append(score)
+        
+        # Take the max score for each metric for this question
+        for metric_name in oracle_scores.keys():
+            if question_scores[metric_name]:  # If we have scores for this question
+                max_score = max(question_scores[metric_name])
+                oracle_scores[metric_name].append(max_score)
+    
+    # Compute mean of the max scores
+    oracle_means = {}
+    for metric_name, scores in oracle_scores.items():
+        if scores:
+            oracle_means[metric_name] = statistics.mean(scores)
+        else:
+            oracle_means[metric_name] = 0.0
+    
+    return oracle_means
+
+
+def print_oracle_scores(oracle_scores: dict, all_file_metrics: Dict[str, Dict[str, dict]]):
+    """Print the oracle (maximum possible) scores."""
+    print("\n" + "="*70)
+    print("ORACLE SCORES (Maximum Achievable by Taking Best per Question)")
+    print("="*70)
+    print("These scores represent what you could achieve by selecting the best")
+    print("model's prediction for each individual question.")
+    print()
+    
+    # Also compute individual model means for comparison
+    individual_means = {}
+    for file_name, metrics in all_file_metrics.items():
+        individual_means[file_name] = {}
+        for metric_type in ["row_matching_f1", "arity_matching_f1", 
+                           "exact_match_f1", "entity_set_f1"]:
+            scores = [m[metric_type] for m in metrics.values()]
+            individual_means[file_name][metric_type] = statistics.mean(scores) if scores else 0.0
+    
+    # Print oracle scores with comparison
+    metric_labels = {
+        "arity_matching_f1": "Arity Matching F1",
+        "exact_match_f1": "Exact Match F1",
+        "row_matching_f1": "Row Matching F1",
+        "entity_set_f1": "Entity Set F1"
+    }
+    
+    for metric_name, label in metric_labels.items():
+        oracle_score = oracle_scores[metric_name]
+        
+        # Find best individual model for this metric
+        best_individual = max(individual_means.items(), 
+                             key=lambda x: x[1][metric_name])
+        best_name = best_individual[0]
+        best_score = best_individual[1][metric_name]
+        
+        improvement = oracle_score - best_score
+        improvement_pct = (improvement / best_score * 100) if best_score > 0 else 0
+        
+        print(f"{label}:")
+        print(f"  Oracle (max per question): {oracle_score:.4f}")
+        print(f"  Best individual model ({best_name}): {best_score:.4f}")
+        print(f"  Potential improvement: +{improvement:.4f} ({improvement_pct:+.1f}%)")
+        print()
+    
+    print("="*70 + "\n")
+
+
+def print_similarity_assessment(similarity_metrics: dict):
+    """Print a clear assessment of whether models perform similarly."""
+    if similarity_metrics is None:
+        print("\nInsufficient data for similarity analysis")
+        return
+    
+    print("\n" + "="*70)
+    print("MODEL SIMILARITY ASSESSMENT (Per-Question Performance)")
+    print("="*70)
+    print(f"Total questions analyzed: {similarity_metrics['num_questions']}")
+    print()
+    
+    # Primary metric interpretation
+    mean_cv = similarity_metrics['mean_cv']
+    print("PRIMARY METRIC: Mean Coefficient of Variation (CV)")
+    print(f"  Value: {mean_cv:.4f}")
+    print(f"  Median CV: {similarity_metrics['median_cv']:.4f}")
+    
+    if mean_cv < 0.15:
+        assessment = "VERY SIMILAR - Models perform consistently across questions"
+        color = "✓"
+    elif mean_cv < 0.30:
+        assessment = "MODERATELY SIMILAR - Some variance but generally consistent"
+        color = "~"
+    elif mean_cv < 0.50:
+        assessment = "MODERATELY DIFFERENT - Noticeable variance across questions"
+        color = "!"
+    else:
+        assessment = "VERY DIFFERENT - High variance in per-question performance"
+        color = "✗"
+    
+    print(f"  Assessment: {color} {assessment}")
+    print()
+    
+    # Secondary metrics
+    print("SUPPORTING METRICS:")
+    print(f"  Mean score range per question: {similarity_metrics['mean_range']:.4f}")
+    print(f"  Median score range per question: {similarity_metrics['median_range']:.4f}")
+    print(f"  Mean standard deviation: {similarity_metrics['mean_stdev']:.4f}")
+    print()
+    
+    # Concordance analysis
+    concordance_pct = similarity_metrics['concordance_rate'] * 100
+    discordance_pct = similarity_metrics['discordance_rate'] * 100
+    
+    print("CONCORDANCE ANALYSIS:")
+    print(f"  Questions with high agreement (CV < 0.1): {similarity_metrics['num_concordant']} ({concordance_pct:.1f}%)")
+    print(f"  Questions with high disagreement (CV > 0.5): {similarity_metrics['num_discordant']} ({discordance_pct:.1f}%)")
+    print()
+    
+    # Overall interpretation
+    print("INTERPRETATION:")
+    if mean_cv < 0.15 and concordance_pct > 60:
+        print("  → Models are performing SIMILARLY on most questions")
+        print("  → Differences are primarily due to noise/randomness")
+    elif mean_cv < 0.30 and concordance_pct > 40:
+        print("  → Models show MODERATE similarity")
+        print("  → Some systematic differences exist but overall trends align")
+    elif discordance_pct > 30:
+        print("  → Models are performing DIFFERENTLY on many questions")
+        print("  → Substantial systematic differences in approach or capability")
+    else:
+        print("  → Models show MIXED performance patterns")
+        print("  → Neither consistently similar nor consistently different")
+    
+    print("="*70 + "\n")
 # ----------------------------------------------------------------------
 # CLI entry point
 # ----------------------------------------------------------------------
@@ -411,7 +741,58 @@ def main():
     )
     
     print("\nAll visualizations complete!")
-
-
+# NEW: Per-question similarity analysis
+# Per-question similarity analysis
+    print("\nAnalyzing per-question similarity across files...")
+    all_file_metrics = {}
+    
+    # Collect per-question metrics from all files
+    for name in baseline_dict.keys():
+        csv_path = None
+        for arg in args.baseline:
+            if ':' in arg:
+                arg_name, arg_path = arg.split(':', 1)
+                if arg_name == name:
+                    csv_path = arg_path
+                    break
+            else:
+                if Path(arg).stem == name:
+                    csv_path = arg
+                    break
+        
+        if csv_path:
+            data = load_csv_data(csv_path)
+            all_file_metrics[name] = compute_per_question_metrics(data, name)
+    
+    for name in test_dict.keys():
+        csv_path = None
+        for arg in args.test:
+            if ':' in arg:
+                arg_name, arg_path = arg.split(':', 1)
+                if arg_name == name:
+                    csv_path = arg_path
+                    break
+            else:
+                if Path(arg).stem == name:
+                    csv_path = arg
+                    break
+        
+        if csv_path:
+            data = load_csv_data(csv_path)
+            all_file_metrics[name] = compute_per_question_metrics(data, name)
+    
+    # Compute similarity metrics
+    similarity_metrics = compute_similarity_metrics(all_file_metrics)
+    
+    # Compute oracle scores
+    oracle_scores = compute_oracle_scores(all_file_metrics)
+    
+    # Print assessments
+    print_similarity_assessment(similarity_metrics)
+    print_oracle_scores(oracle_scores, all_file_metrics)
+    
+    # Print most discordant questions
+    discordant_questions = identify_discordant_questions(all_file_metrics, top_n=10)
+    print_discordant_questions(discordant_questions)
 if __name__ == "__main__":
     main()
