@@ -15,8 +15,9 @@ mcp = FastMCP("GraphDemo")
 basic_mcp = FastMCP("t1")
 no_schema_mcp = FastMCP("t2")
 no_schema_search_mcp = FastMCP("t3")
+sparql_snapshot_mcp = FastMCP("t4")
 
-TOOLSETS = {'mcp': mcp, 'basic_mcp': basic_mcp, 'no_schema_mcp': no_schema_mcp, 'no_schema_with_search_mcp':no_schema_search_mcp}
+TOOLSETS = {'mcp': mcp, 'basic_mcp': basic_mcp, 'no_schema_mcp': no_schema_mcp, 'no_schema_with_search_mcp':no_schema_search_mcp,  'sparql_snapshot_mcp':sparql_snapshot_mcp}
 
 print("loaded mcp")
 
@@ -528,6 +529,7 @@ def get_sparql_prefixes() -> str:
         for prefix, namespace in pre_ns_list
     )
 
+@sparql_snapshot_mcp.tool()
 @basic_mcp.tool()
 @no_schema_mcp.tool()
 @no_schema_search_mcp.tool()
